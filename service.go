@@ -46,6 +46,7 @@ type Service struct {
 	watchReports             int
 	channelErrors            int
 	announcements            []any
+	streamSchedules          []any
 	syncing                  atomic.Bool
 	queued                   atomic.Bool
 	automationChanged        chan struct{}
@@ -124,6 +125,11 @@ func newService(ctx context.Context) (*Service, error) {
 	if s.announcements == nil {
 		s.announcements = []any{}
 	}
+	s.streamSchedules, e = loadStreamSchedules()
+	if e != nil {
+		cancel()
+		return nil, e
+	}
 	cleanup = false
 	return s, nil
 }
@@ -190,12 +196,17 @@ func (s *Service) autoSync() {
 	}
 	for {
 		enabled := flag(s.store.Get("automationEnabled", true))
-		delay := s.checkDelay()
+		s.mu.Lock()
+		planned := s.nextMetadataCheckLocked(unixNow())
+		s.mu.Unlock()
+		delay := 3600.0
 		var next any
 		var wake <-chan time.Time
 		timer := time.NewTimer(time.Duration(delay * 1e9))
-		if enabled {
-			next = unixNow() + delay
+		if enabled && planned != nil {
+			next = planned
+			delay = max(.1, number(planned)-unixNow())
+			timer.Reset(time.Duration(delay * 1e9))
 			wake = timer.C
 		}
 		s.store.Put("automationNextAt", next)
@@ -304,7 +315,7 @@ func (s *Service) snapshotLocked(actor string) M {
 		scope := obj(v)
 		scopes = append(scopes, M{"id": scope["id"], "name": scope["name"], "gameName": scope["gameName"], "rewardCount": len(list(scope["rewards"]))})
 	}
-	return M{"announcements": a, "rewardImageScopes": scopes, "schedule": M{"metadataSource": source, "metadataMinSeconds": minSeconds, "metadataMaxSeconds": maxSeconds, "nextMetadataAt": nextMetadata, "nextChannelAt": nextChannel}, "account": account, "authorization": M{"pending": s.pending != nil, "device": device, "error": s.authError, "reconnectRequired": s.account != nil && flag(s.store.Get("authorizationReconnectRequired", false))}, "settings": settings, "running": s.store.Get("running", false), "state": s.state, "reason": s.reason, "current": clone(s.current), "goals": s.goalStatesLocked(), "queueCompletedAt": s.store.Get("queueCompletedAt", nil), "tasks": tasks, "campaigns": c, "progress": s.store.Get("progress", M{"status": "unknown", "sampledAt": nil, "message": "连接 Twitch 后同步官方进度"}), "syncing": s.syncing.Load() || s.queued.Load(), "lastSync": s.store.Get("lastSync", nil), "lastWatchAt": s.lastWatch, "currentProgress": session, "watchReports": s.watchReports, "network": s.net.network(), "traffic": s.net.usage(), "events": s.store.Events(), "sampledAt": now()}
+	return M{"announcements": a, "rewardImageScopes": scopes, "schedule": M{"metadataSource": source, "metadataMinSeconds": minSeconds, "metadataMaxSeconds": maxSeconds, "nextMetadataAt": nextMetadata, "nextChannelAt": nextChannel, "queryPlan": s.queryPlanLocked(unixNow())}, "account": account, "authorization": M{"pending": s.pending != nil, "device": device, "error": s.authError, "reconnectRequired": s.account != nil && flag(s.store.Get("authorizationReconnectRequired", false))}, "settings": settings, "running": s.store.Get("running", false), "state": s.state, "reason": s.reason, "current": clone(s.current), "goals": s.goalStatesLocked(), "queueCompletedAt": s.store.Get("queueCompletedAt", nil), "tasks": tasks, "campaigns": c, "progress": s.store.Get("progress", M{"status": "unknown", "sampledAt": nil, "message": "连接 Twitch 后同步官方进度"}), "syncing": s.syncing.Load() || s.queued.Load(), "lastSync": s.store.Get("lastSync", nil), "lastWatchAt": s.lastWatch, "currentProgress": session, "watchReports": s.watchReports, "network": s.net.network(), "traffic": s.net.usage(), "events": s.store.Events(), "sampledAt": now()}
 }
 func (s *Service) goalStatesLocked() []any {
 	campaigns := list(s.store.Get("campaigns", []any{}))
@@ -418,6 +429,19 @@ func selectionMetadata(campaigns []any) []any {
 func (s *Service) scan(ctx context.Context, force bool) (result M, err error) {
 	s.scanMu.Lock()
 	defer s.scanMu.Unlock()
+	s.mu.Lock()
+	plan := s.queryPlanLocked(unixNow())
+	if !force && (!flag(plan["active"]) || envBool("TDM_EXTERNAL_SCHEDULER") && number(s.store.Get("automationNextAt", nil)) > unixNow()) {
+		next := s.store.Get("automationNextAt", nil)
+		if !flag(plan["active"]) {
+			next = plan["nextWakeAt"]
+		}
+		s.store.PutMany(M{"automationNextAt": next, "automationLastFinished": now(), "automationLastStatus": "skipped"})
+		s.mu.Unlock()
+		return M{"checked": false, "reason": "waiting_for_query_window", "nextRunAt": next}, nil
+	}
+	s.store.Put("automationNextAt", s.nextMetadataCheckLocked(unixNow()))
+	s.mu.Unlock()
 	s.syncing.Store(true)
 	defer s.syncing.Store(false)
 	s.store.Put("automationLastStarted", now())

@@ -25,9 +25,18 @@ func (s *Service) selectChannel(ctx context.Context) error {
 	s.nextSelection = unixNow() + s.checkDelay()
 	tasks := []any{}
 	for _, v := range list(s.store.Get("tasks", []any{})) {
-		if flag(obj(v)["enabled"]) {
+		if flag(obj(v)["enabled"]) && flag(taskQueryPlan(obj(v), s.streamSchedules, unixNow(), s.current != nil && text(s.current["taskId"]) == text(obj(v)["id"]))["active"]) {
 			tasks = append(tasks, v)
 		}
+	}
+	plan := s.queryPlanLocked(unixNow())
+	for _, v := range list(plan["tasks"]) {
+		if boundary := number(obj(v)["boundaryAt"]); boundary > unixNow() && boundary < s.nextSelection {
+			s.nextSelection = boundary
+		}
+	}
+	if next := number(plan["nextWakeAt"]); next > unixNow() && next < s.nextSelection {
+		s.nextSelection = next
 	}
 	campaignData := list(s.store.Get("campaigns", []any{}))
 	readable := text(obj(s.store.Get("progress", M{}))["status"]) == "available"
@@ -231,6 +240,15 @@ func (s *Service) engineStep(ctx context.Context) (err error) {
 		return nil
 	}
 	if s.finishLocked() {
+		s.mu.Unlock()
+		return nil
+	}
+	queryPlan := s.queryPlanLocked(unixNow())
+	if !flag(queryPlan["active"]) {
+		s.current = nil
+		s.state = "scheduled_wait"
+		s.reason = scheduledReason(queryPlan)
+		s.nextSelection = number(queryPlan["nextWakeAt"])
 		s.mu.Unlock()
 		return nil
 	}

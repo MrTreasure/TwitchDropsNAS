@@ -21,6 +21,7 @@ docs/*
 !catalogue/
 catalogue/*
 !catalogue/announcements.json
+!catalogue/stream-schedules.json
 !dist/
 dist/*
 !dist/twitch-drops

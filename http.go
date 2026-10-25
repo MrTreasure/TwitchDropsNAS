@@ -21,7 +21,7 @@ import (
 
 // Built assets and public documents only. No runtime data or credentials are embedded.
 //
-//go:embed ui/dist catalogue/announcements.json docs/openapi.json
+//go:embed ui/dist catalogue/*.json docs/openapi.json
 var bundled embed.FS
 
 type Web struct {

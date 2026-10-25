@@ -118,6 +118,10 @@
 .drops-diagnostics { margin-top: 12px; font-size: 12px; }
 .drops-diagnostics summary { cursor: pointer; opacity: .7; }
 .drops-diagnostics .drops-facts { margin-bottom: 0; }
+.drops-stream-plan { margin-top: 12px; font-size: 12px; }
+.drops-stream-plan summary { cursor: pointer; }
+.drops-stream-plan p { display: grid; gap: 5px; padding-top: 8px; line-height: 1.6; }
+.drops-stream-plan small { font-size: 11px; opacity: .8; }
 
 .drops-progress-guidance p { margin: 0 0 8px; line-height: 1.7; }
 .drops-progress-guidance .drops-actions { gap: 8px 14px; font-size: 12px; }

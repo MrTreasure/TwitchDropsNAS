@@ -112,6 +112,7 @@ func (s *Service) control(body M) error {
 		}
 	}
 	s.store.PutMany(M{"queueCompletedAt": nil, "running": running})
+	s.notifyAutomation()
 	s.revision++
 	s.current = nil
 	s.nextSelection = 0
@@ -221,11 +222,15 @@ func (s *Service) saveTask(ctx context.Context, id string, body M) error {
 	if e != nil {
 		return e
 	}
+	querySchedule, e := validateQuerySchedule(body["querySchedule"], old, game)
+	if e != nil {
+		return e
+	}
 	newID := id
 	if newID == "" {
 		newID = randomID(16)
 	}
-	updated := M{"id": newID, "game": game, "channels": unique(channels), "goal": goal}
+	updated := M{"id": newID, "game": game, "channels": unique(channels), "goal": goal, "querySchedule": querySchedule}
 	for _, k := range []string{"enabled", "priority", "watchOnly", "autoChannels"} {
 		updated[k] = body[k]
 	}
@@ -244,6 +249,8 @@ func (s *Service) saveTask(ctx context.Context, id string, body M) error {
 	s.nextSelection = 0
 	s.captureGoalsLocked()
 	s.store.Put("queueCompletedAt", nil)
+	s.store.Put("automationNextAt", nil)
+	s.notifyAutomation()
 	s.store.Event("已保存游戏任务及本轮奖励目标", "info")
 	return nil
 }
@@ -260,6 +267,7 @@ func (s *Service) deleteTask(id string) {
 	s.store.Put("tasks", tasks)
 	s.current = nil
 	s.nextSelection = 0
+	s.notifyAutomation()
 	s.store.Event("已删除游戏任务", "info")
 }
 func (s *Service) automation(body M, write bool) (M, error) {

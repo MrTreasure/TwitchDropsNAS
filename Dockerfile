@@ -13,7 +13,7 @@ WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
 COPY *.go ./
-COPY catalogue/announcements.json ./catalogue/announcements.json
+COPY catalogue/*.json ./catalogue/
 COPY docs/openapi.json ./docs/openapi.json
 COPY --from=ui-build /build/dist ./ui/dist
 RUN CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags="-s -w" -o /twitch-drops .

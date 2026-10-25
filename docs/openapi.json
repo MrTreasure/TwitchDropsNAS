@@ -32,7 +32,8 @@
           "409": {
             "description": "State or capability unavailable"
           }
-        }
+        },
+        "description": "schedule.queryPlan exposes per-task published/custom stream windows, nextWakeAt in Unix seconds, UTC startsAt, source URL and state. Never derive stream start from campaign eligibility dates."
       }
     },
     "/auth/start": {
@@ -654,8 +655,45 @@
           },
           "autoChannels": {
             "type": "boolean"
+          },
+          "querySchedule": {
+            "$ref": "#/components/schemas/QuerySchedule"
           }
         }
+      },
+      "QuerySchedule": {
+        "type": "object",
+        "properties": {
+          "mode": {
+            "type": "string",
+            "enum": [
+              "auto",
+              "always",
+              "custom"
+            ],
+            "default": "auto"
+          },
+          "sessions": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "type": "object",
+              "required": [
+                "startsAt"
+              ],
+              "properties": {
+                "startsAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "description": "Explicit timezone required; normalized to UTC"
+                }
+              }
+            }
+          }
+        },
+        "required": [
+          "mode"
+        ]
       }
     }
   }

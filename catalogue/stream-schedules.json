@@ -1,0 +1,120 @@
+[
+  {
+    "gameId": "66366",
+    "gameName": "War Thunder",
+    "sourceUrl": "https://warthunder.com/en/news/10275-esports-watch-the-2026-grand-finals-and-earn-tricolor-smoke-more-twitch-drops-en",
+    "sourceLabel": "Gaijin 官方直播时间（GMT）",
+    "verifiedAt": "2026-10-25T06:35:50.690601+00:00",
+    "timeZone": "UTC",
+    "sessions": [
+      {
+        "id": "2026-10-23",
+        "startsAt": "2026-10-23T14:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第1周正赛"
+      },
+      {
+        "id": "2026-10-24",
+        "startsAt": "2026-10-24T13:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第1周正赛"
+      },
+      {
+        "id": "2026-10-25",
+        "startsAt": "2026-10-25T13:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第1周正赛"
+      },
+      {
+        "id": "2026-10-26",
+        "startsAt": "2026-10-26T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第1周直播重播场"
+      },
+      {
+        "id": "2026-10-27",
+        "startsAt": "2026-10-27T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第1周直播重播场"
+      },
+      {
+        "id": "2026-10-28",
+        "startsAt": "2026-10-28T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第1周直播重播场"
+      },
+      {
+        "id": "2026-10-30",
+        "startsAt": "2026-10-30T14:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第2周正赛"
+      },
+      {
+        "id": "2026-10-31",
+        "startsAt": "2026-10-31T13:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第2周正赛"
+      },
+      {
+        "id": "2026-11-01",
+        "startsAt": "2026-11-01T13:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第2周正赛"
+      },
+      {
+        "id": "2026-11-02",
+        "startsAt": "2026-11-02T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第2周直播重播场"
+      },
+      {
+        "id": "2026-11-03",
+        "startsAt": "2026-11-03T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第2周直播重播场"
+      },
+      {
+        "id": "2026-11-04",
+        "startsAt": "2026-11-04T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第2周直播重播场"
+      },
+      {
+        "id": "2026-11-06",
+        "startsAt": "2026-11-06T14:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第3周正赛"
+      },
+      {
+        "id": "2026-11-07",
+        "startsAt": "2026-11-07T13:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第3周正赛"
+      },
+      {
+        "id": "2026-11-08",
+        "startsAt": "2026-11-08T13:50:00Z",
+        "kind": "live",
+        "label": "WTCS 总决赛 第3周正赛"
+      },
+      {
+        "id": "2026-11-09",
+        "startsAt": "2026-11-09T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第3周直播重播场"
+      },
+      {
+        "id": "2026-11-10",
+        "startsAt": "2026-11-10T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第3周直播重播场"
+      },
+      {
+        "id": "2026-11-11",
+        "startsAt": "2026-11-11T17:00:00Z",
+        "kind": "rerun",
+        "label": "WTCS 总决赛 第3周直播重播场"
+      }
+    ]
+  }
+]

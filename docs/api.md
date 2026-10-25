@@ -79,3 +79,13 @@ See [reward image ingestion](reward-images.md) for repeatable browser extraction
 ## Authorization guidance
 
 `authorization.reconnectRequired` is an optional boolean for a confirmed expired/rejected account login; campaign/inventory capability failures do not set it. Missing accounts should be guided through `/auth/start` and Twitch device approval. Connected accounts with unreadable progress should be directed to official inventory and game linking, without promising another OAuth permission. See [authorization states](authorization.md).
+
+## Scheduled stream queries
+
+Tasks accept optional `querySchedule`: `{ "mode": "auto" | "always" | "custom", "sessions": [{ "startsAt": "2026-10-25T21:50:00+08:00" }] }`. Omission preserves an existing task setting; new tasks default to auto. Custom mode requires 1–100 explicit timezone-bearing dates. Auto uses matching manually verified entries from the bundled `catalogue/stream-schedules.json`, or a file set by `TDM_STREAM_SCHEDULES_FILE`; games with no matching schedule retain randomized low-frequency discovery. Always ignores advertised time windows.
+
+Known sessions start querying exactly five minutes before the advertised stream time, with a selection check also due at the advertised start. A one-hour late-start grace period is a local polling policy, not an official stream end. Once a real stream is selected, watching continues until it actually ends or goals finish; no guessed duration cuts it off. Published live reruns still require a currently live, eligible Twitch channel and do not enable VOD playback. After the known sessions finish, add sessions or choose always for unannounced broadcasts.
+
+`schedule.queryPlan` contains state, active, nextWakeAt, leadSeconds and per-task plans with state, known, startsAt, nextWakeAt, sourceUrl and verifiedAt. All displayed dates use Beijing time in the UI; stored instants are UTC. Campaign eligibility startsAt/endsAt are not stream start times.
+
+The existing metadata executor is retained. Outside query windows (or while the queue is paused), automatic scans return `checked=false`, reason `waiting_for_query_window`, and record `skipped` without validating the account or contacting Twitch. Native executor wakeups remain native wakeups, not claims of fresh official data. No duplicate embedded metadata scheduler is started in external mode. The existing continuous watcher waits locally until the exact preflight time. Explicit manual `/sync` may refresh outside windows; it does not bypass cooldown/integrity protection.

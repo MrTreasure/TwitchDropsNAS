@@ -169,3 +169,9 @@ Only original CDN URLs and provenance timestamps are persisted in SQLite. No sou
 The repository contains this independent service, its reusable UI, and public documentation. It excludes deployment credentials, real account data, proxy nodes, NAS paths, databases, logs, and other backend source. Twitch public Client IDs and GraphQL query hashes are interoperability identifiers, not a user's AK or secret.
 
 This project is not affiliated with Twitch, Gaijin, or any game publisher. Reward eligibility, authorization capabilities, progress and fulfillment remain controlled by those platforms. See [NOTICE.md](NOTICE.md) for upstream attribution and [LICENSE](LICENSE) for the MIT license.
+
+## Stream-aware query scheduling
+
+The default auto mode uses verified advertised stream sessions and begins queries five minutes before the stream, including a check at its advertised start. Campaign eligibility dates are not used as stream times. Outside known windows, automatic channel discovery and metadata checks skip Twitch requests. Native wakeups remain local policy checks; manual sync is still available.
+
+Each task can use Auto / Custom / Always. Custom entries accept explicit timezones through the API and Beijing time through the UI. Games without known sessions retain randomized low-frequency discovery. A one-hour late-start grace applies only while waiting to find a stream; a selected real stream continues until it actually ends or goals complete. Add a session or use Always for unannounced/very late broadcasts. The built-in 18 WTCS sessions cite Gaijin's announcement; operators may supply `TDM_STREAM_SCHEDULES_FILE`. See the API guide for states and provenance.
