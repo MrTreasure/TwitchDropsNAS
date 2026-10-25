@@ -1,13 +1,13 @@
-/* finesse · product · compact desktop operations · density=9 · motion=feedback-only */
-.drops-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; width: 100%; max-width: 1560px; margin-inline: auto; }
+/* finesse · product · desktop operations · fluid workspace · density=8 · one liveness pulse */
+.drops-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; width: 100%; max-width: none; margin-inline: auto; }
 .drops-toolbar, .drops-actions, .drops-link, .drops-game, .drops-device-code { display: flex; align-items: center; gap: 8px; }
 .drops-toolbar { justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .drops-actions { flex-wrap: wrap; flex: none; max-width: 100%; }
-.drops-status { flex: 1; min-width: 220px; font-size: 13px; line-height: 1.7; }
+.drops-status { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; flex: 1; min-width: 220px; font-size: 13px; line-height: 1.7; }
 .drops-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; border: 1px solid color-mix(in srgb, currentColor 12%, transparent); border-radius: 8px; overflow: hidden; }
 .drops-page .drops-metric.wt-admin-panel { padding: 10px 14px; border: 0; border-radius: 0; background: transparent; border-inline-end: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
 .drops-page .drops-metric:last-child { border-inline-end: 0; }
-.drops-workspace { display: grid; grid-template-columns: minmax(0, 1fr) 292px; align-items: start; gap: 12px; }
+.drops-workspace { display: grid; grid-template-columns: minmax(0, 1fr) clamp(360px, 25%, 440px); align-items: start; gap: 12px; }
 .drops-main, .drops-sidebar { display: grid; align-content: start; gap: 12px; min-width: 0; }
 .drops-page .wt-admin-panel { padding: 14px 16px; border-radius: 8px; }
 .drops-page .wt-admin-panel-title h2 { font-size: 14px; line-height: 1.5; }
@@ -76,7 +76,7 @@
 .drops-announcement-title { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; margin-bottom: 10px; }
 .drops-announcement-title h3 { margin: 0; font-size: 13px; }
 .drops-announcement-title > span { font-size: 12px; opacity: .7; }
-.drops-public-rewards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.drops-public-rewards { display: grid; grid-template-columns: repeat(auto-fit, minmax(184px, 1fr)); gap: 8px; }
 .drops-public-rewards > div { display: flex; align-items: center; gap: 9px; padding: 9px; min-width: 0; overflow: hidden; border: 1px solid color-mix(in srgb, currentColor 12%, transparent); border-radius: 8px; }
 .drops-public-reward-body { display: grid; align-content: center; gap: 5px; min-width: 0; }
 .drops-public-rewards > div > .drops-reward-image { width: 64px; flex: 0 0 64px; border-radius: 5px; }
@@ -112,3 +112,23 @@
 .drops-auth-steps { padding-inline-start: 22px; margin-block: 12px; }
 .drops-auth-steps li + li { margin-top: 18px; }
 .drops-auth-steps p { margin: 6px 0 8px; font-size: 13px; line-height: 1.8; }
+
+/* Runtime markers describe the queue/task state, never inferred reward progress. */
+.drops-run-marker { display: inline-flex; align-items: center; gap: 7px; flex: none; white-space: nowrap; font-size: 12px; line-height: 1.6; padding: 3px 9px; border-radius: 5px; color: var(--lab-muted, #66756f); background: color-mix(in srgb, currentColor 8%, transparent); }
+.drops-run-marker > i { width: 6px; height: 6px; flex: none; border-radius: 50%; background: currentColor; }
+.drops-run-marker[data-state="running"] { color: var(--lab-highlight, var(--lab-text-4c6f60, #4c6f60)); background: color-mix(in srgb, var(--lab-accent, #4c6f60) 18%, transparent); }
+.drops-run-marker[data-state="pending"] { color: var(--lab-text, #4c6f60); }
+.drops-run-marker[data-state="attention"], .drops-run-marker[data-state="cooldown"] { color: var(--lab-highlight, #9a6a23); background: color-mix(in srgb, currentColor 10%, transparent); }
+.drops-run-marker[data-state="completed"] { color: var(--lab-text, #4c6f60); }
+.drops-run-marker[data-pulse] > i { animation: drops-liveness 1.6s ease-in-out infinite; }
+@keyframes drops-liveness { 0%, 100% { opacity: .45; } 50% { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .drops-run-marker[data-pulse] > i { animation: none; opacity: .8; } }
+.drops-page .drops-task-table.ant-table-wrapper { overflow: visible; }
+.drops-task-table .ant-table-content { overflow-y: hidden; }
+.drops-task-table .ant-table-cell { vertical-align: middle; overflow-wrap: anywhere; }
+.drops-task-table .drops-game { align-items: flex-start; }
+.drops-task-status { display: grid; justify-items: start; gap: 6px; }
+.drops-task-status small { font-size: 12px; line-height: 1.6; opacity: .7; }
+.drops-page .drops-task-table .drops-task-running > td:first-child { background: color-mix(in srgb, var(--lab-accent, #4c6f60) 8%, var(--lab-panel, transparent)) !important; }
+.drops-sidebar .drops-facts { grid-template-columns: 94px minmax(0, 1fr); }
+.drops-sidebar .drops-log > div { grid-template-columns: 68px minmax(0, 1fr); gap: 10px; }

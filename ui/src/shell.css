@@ -2,7 +2,7 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 a { color: #486e58; text-underline-offset: 3px; }
-.standalone-shell { max-width: 1600px; padding: 20px; margin: auto; }
+.standalone-shell { width: 100%; max-width: none; padding: 20px; margin: auto; }
 .standalone-shell > header { display: flex; gap: 24px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
 h1 { font-size: 20px; margin: 0; }
 header p { color: #66756f; margin: 5px 0 0; font-size: 12px; }

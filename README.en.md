@@ -155,12 +155,6 @@ Routine verification: `go vet ./...`, `go build ./...`, UI typecheck/build, and 
 
 `Dockerfile` builds UI and Go in separate build stages. After `sh scripts/build.sh`, use `docker build -f Dockerfile.runtime -t twitch-drops-nas:2.0.0 .` for the compact runtime image. Runtime images contain no Python, Node.js or Go compiler. Dependencies are pinned in `go.mod`, `go.sum` and the UI lockfile.
 
-## Upgrading from Python 1.x
-
-Go 2.x reads the existing SQLite schema, private JSON credentials or explicitly configured YAML adapter, and management token. Management cookie signatures and API paths remain compatible. Reward goals, unknown progress, imported image URLs and scheduler state are preserved.
-
-Stop the old instance and back up its private data directory/volume before upgrading. Run only one instance per directory and never delete the volume during an upgrade. Replace Python health commands with `twitch-drops health`, and the native scheduler command with `twitch-drops sync`; keep its unique schedule and verify registration/control. Old Python commands cannot run in the Go image. Keep Python 1.x sources and old images until Go acceptance, then remove them. Stop Go before rolling back to the previous image and private backup.
-
 Reward cards reference the original official CDN HTTPS URLs directly. Browsers lazy-load the images; the NAS does not download, proxy, or rehost the originals. Public notices use `rewards[].imageUrl`; tracked rewards use Twitch-provided `benefit.imageAssetURL`. Missing or failed images keep a labeled placeholder and the reward text. Additional image domains require matching backend, UI, and host CSP allowlists.
 
 ## Images for future campaigns

@@ -33,7 +33,34 @@ type Snapshot = {
  events: { id: number; at: string; level: string; message: string }[];
 };
 type TaskForm = { gameName: string; priority: number; enabled: boolean; watchOnly: boolean; autoChannels: boolean; channelsText: string; goalMode: 'all' | 'selected'; rewardKeys: string[]; resetGoals: boolean };
-const stateLabels: Record<string, string> = { paused: '已暂停', watching: '观看上报中', waiting: '等待任务', error: '需要处理', login_required: '等待登录', cooldown: '冷却中', completed: '本轮已完成' };
+type RunState = { kind: 'running' | 'pending' | 'paused' | 'disabled' | 'completed' | 'attention' | 'cooldown'; label: string; detail?: string };
+function queueRunState(data: Snapshot, controlPending: boolean): RunState {
+ if (controlPending) return { kind: 'pending', label: data.running ? '正在暂停' : '正在启动' };
+ if (data.queueCompletedAt) return { kind: 'completed', label: '本轮已完成' };
+ if (data.authorization.reconnectRequired || data.state === 'login_required') return { kind: 'attention', label: '需要授权' };
+ if (!data.running) return { kind: data.state === 'error' ? 'attention' : 'paused', label: data.state === 'error' ? '需要处理' : '已暂停' };
+ if (data.state === 'cooldown') return { kind: 'cooldown', label: '已启动 · 冷却中' };
+ if (data.state === 'error') return { kind: 'attention', label: '已启动 · 需要处理' };
+ return { kind: 'running', label: data.state === 'watching' ? '运行中 · 观看上报' : '运行中 · 自动值守' };
+}
+function taskRunState(task: Task, data: Snapshot): RunState {
+ if (!task.enabled) return { kind: 'disabled', label: '已停用', detail: '不参与本轮调度' };
+ const goal = data.goals.find(item => item.taskId === task.id);
+ if (goal?.status === 'completed') return { kind: 'completed', label: '目标已达标', detail: '奖励仍需手动领取' };
+ if (data.authorization.reconnectRequired || data.state === 'login_required') return { kind: 'attention', label: '等待授权', detail: '连接账号后可继续' };
+ if (!data.running) return { kind: data.state === 'error' ? 'attention' : 'paused', label: data.state === 'error' ? '需要处理' : '已暂停', detail: '当前没有执行挂机' };
+ if (data.state === 'cooldown') return { kind: 'cooldown', label: '冷却中', detail: '到时自动检查' };
+ if (data.state === 'error') return { kind: 'attention', label: '需要处理', detail: '请查看上方运行说明' };
+ if (goal?.status === 'waiting_claim') return { kind: 'attention', label: '等待手动领取', detail: '领取前置奖励后继续' };
+ if (goal?.status === 'expired') return { kind: 'attention', label: '活动已结束', detail: '请重新设置奖励目标' };
+ if (data.current?.taskId === task.id) return { kind: 'running', label: '观看上报中', detail: '掉宝进度以 Twitch 为准' };
+ if (data.current) return { kind: 'pending', label: '排队中', detail: '当前正在执行其他游戏' };
+ if (goal?.status === 'waiting_targets' && !task.watchOnly) return { kind: 'pending', label: '已启动 · 等待资料', detail: '取得活动资料后自动调度' };
+ return { kind: 'running', label: '挂机中 · 等待开播', detail: '发现符合条件直播后执行' };
+}
+function RunMarker({ state, pulse = false }: { state: RunState; pulse?: boolean }) {
+ return <span className="drops-run-marker" data-state={state.kind} data-pulse={pulse && state.kind === 'running' || undefined}><i aria-hidden="true" /><span>{state.label}</span></span>;
+}
 const goalLabels: Record<string, string> = { waiting_targets: '等待官方目标资料', ready: '等待直播／执行中', unknown: '官方进度无法确认', waiting_claim: '等待手动领取前置奖励', completed: '本轮目标已达标', expired: '活动结束，目标未完成' };
 const rewardKey = (ref: GoalRef) => JSON.stringify([ref.campaignId, ref.dropId]);
 const date = (value?: string | null) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) : '尚无记录';
@@ -142,7 +169,6 @@ export default function TwitchDrops({ apiBase = '/api', taskRegistryHref, onNavi
  const savedOptions = data?.goals.find(g => g.taskId === editingTask?.id)?.rewards.filter(r => !availableKeys.has(rewardKey(r))).map(r => ({ value: rewardKey(r), label: `${r.campaignName} · ${r.name}` })) ?? [];
  if (savedOptions.length && editingGame === editingTask?.game.name) rewardOptions.push({ label: '已保存目标（等待资料）', options: savedOptions });
  const selectedRewards = new Set(data?.tasks.flatMap(t => t.enabled ? t.goal.rewards.map(rewardKey) : []) ?? []);
- const live = data?.state === 'watching';
  const reconnectRequired = !!data?.authorization.reconnectRequired || data?.state === 'login_required';
  const known = data?.progress.status === 'available' && !reconnectRequired;
  function showAccountConnection() { accountSection.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
@@ -151,7 +177,7 @@ export default function TwitchDrops({ apiBase = '/api', taskRegistryHref, onNavi
  return <div className="drops-page" aria-busy={!!busy}>
   {error && <Alert type="error" showIcon title={error} closable onClose={() => setError('')} />}
  {imageNotice && <Alert type="success" showIcon title={imageNotice} closable onClose={() => setImageNotice('')} />}
-  <div className="drops-toolbar"><span className="drops-status"><Tag color={live ? 'processing' : data?.state === 'error' ? 'warning' : 'default'}>{stateLabels[data?.state ?? ''] || '读取状态'}</Tag>{data?.reason ?? '正在连接掉宝服务'}</span><div className="drops-actions">
+  <div className="drops-toolbar"><div className="drops-status" role="status" aria-live="polite">{data ? <RunMarker state={queueRunState(data, busy === 'control')} pulse /> : <Tag>读取状态</Tag>}<span>{data?.reason ?? '正在连接掉宝服务'}</span></div><div className="drops-actions">
    <Button icon={<ImagePlus size={15} />} disabled={!data?.rewardImageScopes?.length || !!busy} title={!data?.rewardImageScopes?.length ? '取得活动资料后可补充图片' : undefined} onClick={openImages}>奖励图片</Button>
    <Button icon={<Settings2 size={15} />} disabled={!data || !!busy} onClick={openSettings}>连接设置</Button>
    <Button icon={<RefreshCw size={15} />} loading={busy === 'sync' || data?.syncing} disabled={!data?.account || !!busy || data?.syncing} onClick={() => void action('sync', '/sync')}>同步官方进度</Button>
@@ -162,7 +188,7 @@ export default function TwitchDrops({ apiBase = '/api', taskRegistryHref, onNavi
    {data.queueCompletedAt && <Alert type="success" showIcon title="本轮所有目标已达标，挂机已自动结束" description={<>完成于 {date(data.queueCompletedAt)}。未领取奖励请到 Twitch 手动领取；下一轮请在游戏任务设置中重新选择目标。</>} />}
    <div className="drops-summary">
     <section className="wt-admin-panel drops-metric"><span><Twitch size={16} /> Twitch 账号</span><strong>{data.account?.login ?? '未连接'}</strong><small>{data.account ? '登录校验 ' + date(data.account.validatedAt) : '在官方页面完成设备授权'}</small></section>
-    <section className="wt-admin-panel drops-metric"><span><Gamepad2 size={16} /> 当前任务</span><strong>{data.current?.game.name ?? '等待执行'}</strong><small>{data.current ? <a href={`https://www.twitch.tv/${encodeURIComponent(data.current.channel.login)}`} target="_blank" rel="noreferrer">{data.current.channel.displayName} ↗</a> : '一个账号同时执行一个游戏任务'}</small></section>
+    <section className="wt-admin-panel drops-metric"><span><Gamepad2 size={16} /> 当前任务</span><strong>{data.current?.game.name ?? (data.running ? '后台值守中' : '已暂停')}</strong><small>{data.current ? <a href={`https://www.twitch.tv/${encodeURIComponent(data.current.channel.login)}`} target="_blank" rel="noreferrer">{data.current.channel.displayName} ↗</a> : data.running ? '自动检查频道，等待符合条件的直播' : '启动后将自动检查频道'}</small></section>
     <section className="wt-admin-panel drops-metric"><span><Network size={16} /> 当前线路</span><strong>{({ direct: '直连', proxy: data.network.proxy, unknown: '等待连接' } as Record<string, string>)[data.network.route] ?? '未知'}</strong><small>{data.network.route === 'proxy' ? '仅使用部署方配置的代理' : data.settings.networkMode === 'auto' ? '直连优先，失败后使用配置的代理' : '按手动线路设置运行'}</small></section>
     <section className="wt-admin-panel drops-metric"><span>今日代理流量</span><strong>{bytes(data.traffic.proxyDayBytes)}</strong><small>今日全部线路 {bytes(data.traffic.dayBytes)}</small></section>
    </div>
@@ -170,11 +196,12 @@ export default function TwitchDrops({ apiBase = '/api', taskRegistryHref, onNavi
    <div className="drops-workspace"><div className="drops-main">
    <section className="wt-admin-panel">
     <div className="wt-admin-panel-title"><div><h2>游戏任务</h2><p className="wt-admin-help">按优先级执行；全部启用目标达标后结束本轮。</p></div><Button icon={<Plus size={15} />} disabled={!!busy || data.tasks.length >= 12} onClick={() => edit('new')}>添加游戏</Button></div>
-    <Table<Task> size="small" rowKey="id" dataSource={data.tasks} pagination={false} scroll={{ x: 820 }} locale={{ emptyText: <Empty description="还没有游戏任务" /> }} columns={[
-     { title: '游戏', render: (_, task) => <div className="drops-game"><strong>{task.game.name}</strong>{data.current?.taskId === task.id && <Tag color="processing">当前执行</Tag>}<small>{task.enabled ? '已启用' : '已停用'}</small></div> },
-     { title: '优先级', dataIndex: 'priority', width: 86, sorter: (a, b) => a.priority - b.priority, defaultSortOrder: 'descend' },
-     { title: '频道', width: 160, render: (_, task) => <div className="drops-channel-policy"><span>{task.channels.length ? `${task.channels.length} 个指定频道` : '未指定频道'}{task.autoChannels ? ' · 自动发现' : ''}</span><small>{task.watchOnly ? '仅观看 · 资格需人工核对' : '确认资格后执行'}</small></div> },
-     { title: '本轮目标', width: 210, render: (_, task) => { const goal = data.goals.find(g => g.taskId === task.id); return <div className="drops-goal-summary"><strong>{task.goal.mode === 'all' ? '本轮全部奖励' : '指定奖励'}{goal?.total ? ` · ${goal.completed} / ${goal.total}` : ''}</strong><span>{goalLabels[goal?.status ?? 'waiting_targets']}</span>{!!goal?.claimPending && <small>{goal.claimPending} 个目标已达标，待手动领取</small>}{!!goal?.blocked && <small>{goal.blocked} 个目标等待领取前置奖励，其他目标可继续</small>}</div>; } },
+    <Table<Task> className="drops-task-table" size="small" rowKey="id" tableLayout="fixed" rowClassName={task => { const state = taskRunState(task, data); return state.kind === 'running' ? 'drops-task-running' : ''; }} dataSource={data.tasks} pagination={false} scroll={{ x: 1080 }} locale={{ emptyText: <Empty description="还没有游戏任务" /> }} columns={[
+     { title: '游戏', width: 210, render: (_, task) => <div className="drops-game"><strong>{task.game.name}</strong></div> },
+     { title: '运行状态', width: 196, render: (_, task) => { const state = taskRunState(task, data); return <div className="drops-task-status"><RunMarker state={state} /><small>{state.detail}</small></div>; } },
+     { title: '优先级', dataIndex: 'priority', width: 80, sorter: (a, b) => a.priority - b.priority, defaultSortOrder: 'descend' },
+     { title: '频道', width: 210, render: (_, task) => <div className="drops-channel-policy"><span>{task.channels.length ? `${task.channels.length} 个指定频道` : '未指定频道'}{task.autoChannels ? ' · 自动发现' : ''}</span><small>{task.watchOnly ? '仅观看 · 资格需人工核对' : '确认资格后执行'}</small></div> },
+     { title: '本轮目标', width: 250, render: (_, task) => { const goal = data.goals.find(g => g.taskId === task.id); return <div className="drops-goal-summary"><strong>{task.goal.mode === 'all' ? '本轮全部奖励' : '指定奖励'}{goal?.total ? ` · ${goal.completed} / ${goal.total}` : ''}</strong><span>{goalLabels[goal?.status ?? 'waiting_targets']}</span>{!!goal?.claimPending && <small>{goal.claimPending} 个目标已达标，待手动领取</small>}{!!goal?.blocked && <small>{goal.blocked} 个目标等待领取前置奖励，其他目标可继续</small>}</div>; } },
      { title: '', width: 132, render: (_, task) => <div className="drops-actions"><Button size="small" disabled={!!busy} onClick={() => edit(task)}>设置</Button><Button size="small" disabled={!!busy} onClick={() => void action('task-toggle', `/tasks/${task.id}`, 'PUT', { gameName: task.game.name, priority: task.priority, watchOnly: task.watchOnly, autoChannels: task.autoChannels, channels: task.channels, enabled: !task.enabled })}>{task.enabled ? '停用' : '启用'}</Button></div> },
     ]} />
    </section>

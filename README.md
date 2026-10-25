@@ -140,12 +140,6 @@ cat data/admin-token
 
 完整 Dockerfile 在多阶段构建中编译 UI 和 Go；已经执行 `sh scripts/build.sh` 时，可用 `docker build -f Dockerfile.runtime -t twitch-drops-nas:2.0.0 .` 构建精简运行镜像。Go 模块和 UI 依赖均锁定版本。运行镜像不包含 Go 编译器、Node.js 或 Python。
 
-## 从 Python 1.x 升级
-
-Go 2.x 继续读取原来的 `state.sqlite`、`credentials.json` 或显式配置的 YAML 凭据适配器，以及 `admin-token`，不要求重新授权。管理 Cookie 签名和 API 保持兼容，游戏目标、未知进度、图片记录及周期任务开关均保留。
-
-升级前停止旧实例并备份私有数据目录／卷，再构建并启动 Go 镜像；同一数据目录只允许一个实例。不要删除卷，不要将真实数据放入仓库。原生定时任务改为执行 `twitch-drops sync`，保留原来的唯一计划并核对任务登记；健康检查改为 `twitch-drops health`。原有 Python 健康命令和 `deploy/sync.py` 不能在 Go 运行镜像中使用。回滚前停止 Go 实例，再使用保留的旧镜像和备份。Go 版验收前保留 Python 1.x 源码和旧镜像；验收后再清理，不提前删除回滚材料。
-
 ## 说明与许可证
 
 此项目与 Twitch、Gaijin 及任何游戏发行商无隶属关系。活动资格、奖励发放、授权范围及进度由 Twitch / 游戏发行商决定；遇验证或限流停止／退避，不绕过验证。参考项目和原版权声明见 [NOTICE.md](NOTICE.md)，本项目使用 [MIT](LICENSE)。
