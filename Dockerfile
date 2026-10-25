@@ -16,7 +16,8 @@ COPY --chown=1000:1000 --chmod=0444 service.py twitch.py goals.py transport.py s
 COPY --from=ui-build --chown=1000:1000 /build/dist ./ui
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TDM_DATA_DIR=/data TDM_SOCKET=/run/twitch-drops/service.sock TDM_HTTP_PORT=8080
 COPY --chown=1000:1000 --chmod=0444 docs/openapi.json ./docs/openapi.json
-RUN chmod -R a+rX /app/ui && chmod 0755 /app/docs
+COPY --chown=1000:1000 --chmod=0444 catalogue/announcements.json ./catalogue/announcements.json
+RUN chmod -R a+rX /app/ui && chmod 0755 /app/docs /app/catalogue
 USER 1000:1000
 EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD python -c "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=3).status==200"

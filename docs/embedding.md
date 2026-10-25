@@ -29,7 +29,7 @@ import TwitchDrops from './TwitchDropsView';
 
 ## 现有调度器
 
-设置 `TDM_EXTERNAL_SCHEDULER=true`。保留宿主原有、唯一的 5 分钟计划，调用 socket `/internal/scan`，以真实 HTTP 返回记录执行状态；禁用时阻止后续同步。`deploy/sync.py` 支持该调用。
+设置 `TDM_EXTERNAL_SCHEDULER=true`。保留宿主原有、唯一的原生随机检查计划，调用 socket `/internal/scan`，以真实 HTTP 返回记录执行状态；禁用时阻止后续同步。`deploy/sync.py` 支持该调用。
 
 同步定时任务的停用不会停止观看心跳；页面的暂停才停止挂机。若宿主有统一任务登记，登记此原生计划并实际读回启停状态，避免重复计划。
 

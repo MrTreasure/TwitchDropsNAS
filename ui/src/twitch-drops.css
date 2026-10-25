@@ -54,3 +54,15 @@
 .drops-goal-summary small { opacity: .7; }
 .drops-goal-help { font-size: 13px; line-height: 1.7; margin-bottom: 16px; }
 .drops-reward strong + .ant-tag { margin-inline-start: 8px; }
+
+.drops-announcements article { margin-top: 18px; }
+.drops-announcement-title { display: flex; gap: 16px; align-items: baseline; justify-content: space-between; flex-wrap: wrap; margin-bottom: 14px; }
+.drops-announcement-title h3 { margin: 0; font-size: 15px; }
+.drops-announcement-title > span { font-size: 12px; opacity: .7; }
+.drops-public-rewards { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.drops-public-rewards > div { display: grid; align-content: start; gap: 9px; padding: 15px; border: 1px solid color-mix(in srgb, currentColor 12%, transparent); border-radius: 8px; }
+.drops-public-rewards strong { font-size: 14px; }
+.drops-public-rewards span { min-height: 36px; font-size: 12px; opacity: .7; overflow-wrap: anywhere; }
+.drops-public-rewards b { font-size: 19px; font-weight: 600; }
+.drops-public-rewards small { font-size: 12px; opacity: .7; }
+.drops-interval-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "TwitchDropsNAS API",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "description": "Single-account NAS Drops management; manual claiming only."
   },
   "servers": [
@@ -162,6 +162,16 @@
                       "direct",
                       "proxy"
                     ]
+                  },
+                  "checkMinSeconds": {
+                    "type": "integer",
+                    "minimum": 120,
+                    "maximum": 10800
+                  },
+                  "checkMaxSeconds": {
+                    "type": "integer",
+                    "minimum": 120,
+                    "maximum": 10800
                   }
                 }
               }

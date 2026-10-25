@@ -11,3 +11,11 @@ data/
 *.sqlite*
 credentials.json
 admin-token
+
+*.log
+*.har
+*.pem
+*.key
+cookies*.json
+storage-state*.json
+.cache/

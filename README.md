@@ -1,8 +1,18 @@
 # TwitchDropsNAS
 
+简体中文 · [English](README.en.md)
+
 NAS 上运行的 Twitch Drops 管理服务：低流量观看、多游戏队列、奖励目标、独立 Web UI，以及 Agent / 控制台接入 API。MIT 开源。
 
-**当前状态：** Docker、UI 构建和 API 可本地验证；观看上报不等于 Twitch 计入奖励进度。此实现尚未完成一场符合条件直播中的掉宝增长端到端验证。Twitch 的非公开接口可能变化或限制授权能力，不能保证任何活动或账号可用。
+**当前状态（实验性）：** 已验证 Docker、UI 与管理 API，但现有设备授权未返回活动目录和个人掉宝进度；网页查询还可能要求完整性验证。授权成功不等于掉宝能力可用。活动说明与账号进度独立展示，不会把 `null` 当成无活动或零进度；个人进度不可读时，不能可靠执行自动达标停止。实际掉宝增长尚未经符合条件的直播验证。
+
+## 界面截图
+
+截图来自隔离演示实例，未连接真实 Twitch 账号，不包含个人昵称、NAS 地址、授权码或密钥。公开奖励说明不代表已获得或已计入进度。
+
+![独立 UI：公开活动奖励说明与进度状态](docs/images/dashboard.png)
+
+![随机检查间隔与连接设置](docs/images/check-settings.png)
 
 ## 功能
 
@@ -41,7 +51,7 @@ Compose 默认只绑定主机回环地址。使用 HTTPS 反向代理时，设�
 
 也可只读挂载原有 mihomo 配置与二进制，设置 `TDM_PROXY_SOURCE`、`TDM_PROXY_NODE`、`TDM_MIHOMO`，只使用明确指定的节点。临时配置通过 Linux memfd 传入，不复制节点密钥到磁盘。项目不包含、推荐或自动选择任何代理供应商。
 
-复用连接；观看上报每分钟一次；离线频道批量检查；官方当前会话每 5 分钟检查；库存通常缓存 30 分钟，等待前置领取时每 5 分钟读取；活动目录缓存 1 小时，元数据缓存 6 小时。手动同步可立即更新。计量值不是服务商账单，外部 HTTP 代理的开销按估算记录。
+复用连接；观看上报每分钟一次；离线频道批量检查；空闲频道默认随机间隔 10～20 分钟检查；独立模式的资料同步也采用随机区间；库存通常缓存 30 分钟，等待前置领取时随下一次资料检查更新；活动目录缓存 1 小时，元数据缓存 6 小时。手动同步可立即更新。计量值不是服务商账单，外部 HTTP 代理的开销按估算记录。
 
 ## 目标与停止规则
 
@@ -75,14 +85,16 @@ Compose 默认只绑定主机回环地址。使用 HTTPS 反向代理时，设�
 | `TDM_PROXY_SOURCE` / `TDM_PROXY_NODE` | 可选，只读 mihomo 原配置及指定节点 |
 | `TDM_MIHOMO` | `/usr/local/bin/mihomo`，需自行只读挂载兼容二进制 |
 | `TDM_PROXY_LABEL` | 可选，界面上的非敏感代理显示名 |
-| `TDM_EXTERNAL_SCHEDULER` | `false`；设为 `true` 时关闭服务内每 5 分钟同步，改由唯一外部执行器调用 |
+| `TDM_EXTERNAL_SCHEDULER` | `false`；设为 `true` 时关闭服务内随机资料检查，改由唯一外部执行器调用 |
+| `TDM_EXTERNAL_CHECK_MIN_SECONDS` / `TDM_EXTERNAL_CHECK_MAX_SECONDS` | 外部计划在 UI 中的说明范围，默认 600 / 1200 秒；须与真实原生计划一致，并不修改原生计划 |
+| `TDM_ANNOUNCEMENTS_FILE` | 可选，管理员维护的公开活动说明 JSON；默认使用内置的已核对公告，仅展示说明，不作为个人进度或奖励 ID |
 | `TDM_PASSWORD_BOOK` | 可选 YAML 凭据宿主适配器，只修改 `twitch_drops.account`；未配置则用 `/data/credentials.json` |
 
 ## 调度与 Agent
 
-独立部署默认每 5 分钟同步官方资料，可通过 `/api/automation` 查询启停和真实执行状态。开启／暂停挂机与启停资料同步是两个独立开关。
+独立部署默认在 10～20 分钟范围内重新随机选择资料检查间隔，可通过 `/api/automation` 查询启停和真实执行状态。开启／暂停挂机与启停资料同步是两个独立开关。
 
-若宿主已有 cron、systemd 或任务控制台，使用 `TDM_EXTERNAL_SCHEDULER=true`，只登记原生执行器；不要再建另一份业务计划。`deploy/` 提供 systemd 模板。HTTP 保活和观看心跳不是资料同步调度。
+若宿主已有 cron、systemd 或任务控制台，使用 `TDM_EXTERNAL_SCHEDULER=true`，只登记原生执行器；不要再建另一份业务计划。附带的 systemd 示例使用 上次检查结束后等待 10 分钟，再加 0～10 分钟随机延迟；启动时另有一次初始检查，不声明这能避免平台识别。`deploy/` 提供 systemd 模板。HTTP 保活和观看心跳不是资料同步调度。
 
 [API 文档](docs/api.md) · [OpenAPI](docs/openapi.json) · [Agent 接入提示词](docs/agent-prompt.md)
 
@@ -98,8 +110,18 @@ TDM_DATA_DIR=./data TDM_UI_DIR=./ui/dist TDM_SOCKET=./data/service.sock .venv/bi
 
 常规验证：`python3 -m py_compile *.py`、`pnpm --dir ui run typecheck`、`pnpm --dir ui run build`、容器健康和有界 API 检查。UI 交互由人工验收，不默认运行浏览器自动化。
 
-完整 Dockerfile 在容器内构建 UI；已有本地 UI 构建时可用 `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.0.0 .`。Python / UI 依赖固定，Node 构建阶段采用固定版本。
+完整 Dockerfile 在容器内构建 UI；已有本地 UI 构建时可用 `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.0.1 .`。Python / UI 依赖固定，Node 构建阶段采用固定版本。
 
 ## 说明与许可证
 
 此项目与 Twitch、Gaijin 及任何游戏发行商无隶属关系。活动资格、奖励发放、授权范围及进度由 Twitch / 游戏发行商决定；遇验证或限流停止／退避，不绕过验证。参考项目和原版权声明见 [NOTICE.md](NOTICE.md)，本项目使用 [MIT](LICENSE)。
+
+## 活动说明与账号进度
+
+`catalogue/announcements.json` 是人工核对、带来源与核对时间的公开活动说明。目前包含战雷 WTCS 2026 第一周的 5 项奖励，来源是发行商官方公告，活动窗口参考 Twitch 活动页。它不是从私人库存推断的结果，不含账号关联、观看分钟数、领取状态或 Twitch 奖励 ID，不进入自动目标完成判定。其他游戏可由管理员按同样结构补充公开说明。
+
+活动目录、活动详情和个人库存分别读取，接口字段必须是期望的列表类型；返回空值时显示能力未知／不可用，并保留真正确认过的数据。接口能力失败会退避缓存，手动同步可主动核对；遇完整性验证不会更换客户端头、生成校验令牌或绕过验证。
+
+## 隐私与开源边界
+
+仅发布独立掉宝服务、可复用 UI 与公开说明；不包含任何部署方的真实账号、代理节点、NAS 目录、数据库、日志或其他后台源码。Twitch 公共 Client ID 和 GraphQL 查询哈希是公开互操作标识，不是用户 AK。真实管理令牌和 Twitch 凭据只保存在运行时私有存储中，不进入 API 快照、镜像构建上下文或 Git。

@@ -18,3 +18,7 @@ ui/*
 !docs/
 docs/*
 !docs/openapi.json
+
+!catalogue/
+catalogue/*
+!catalogue/announcements.json

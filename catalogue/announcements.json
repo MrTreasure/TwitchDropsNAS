@@ -1,0 +1,48 @@
+[
+  {
+    "id": "war-thunder-wtcs-pro-grand-finals-2026-week-1",
+    "gameId": "66366",
+    "gameName": "War Thunder",
+    "name": "WTCS Pro Grand Finals · 第一周",
+    "startsAt": "2026-10-23T10:00:00Z",
+    "endsAt": "2026-10-29T09:59:00Z",
+    "sourceUrl": "https://warthunder.com/en/news/10275-esports-watch-the-2026-grand-finals-and-earn-tricolor-smoke-more-twitch-drops-en",
+    "sourceLabel": "Gaijin 官方活动公告",
+    "verifiedAt": "2026-10-25T03:04:28.542664+00:00",
+    "windowBasis": "Twitch 公开活动说明，2026-10-25 人工核对；时间为 UTC+8，已转换为 UTC",
+    "channels": [
+      "warthunder_esports",
+      "warthunder_esports_de",
+      "warthunder_esports_fr",
+      "warthunder_esports_ru",
+      "warthunder_esports_pl"
+    ],
+    "rewards": [
+      {
+        "name": "50% Silver Lion Booster",
+        "label": "50% 银狮加成",
+        "requiredMinutes": 30
+      },
+      {
+        "name": "50% Research Point Booster",
+        "label": "50% 研发点加成",
+        "requiredMinutes": 60
+      },
+      {
+        "name": "1 Day of Premium",
+        "label": "1 天高级账号",
+        "requiredMinutes": 120
+      },
+      {
+        "name": "\"Vampir\" camouflage for the Bf 109 E-3",
+        "label": "Bf 109 E-3“Vampir”涂装",
+        "requiredMinutes": 300
+      },
+      {
+        "name": "Bf 109 E-3 Plane",
+        "label": "Bf 109 E-3 掉宝载具",
+        "requiredMinutes": 600
+      }
+    ]
+  }
+]

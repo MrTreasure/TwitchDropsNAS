@@ -10,7 +10,7 @@ DEVICE_CLIENT = 'ue6666qo983tsx6so1t0vnawi233wa'
 # Operation names/hashes follow the MIT-licensed upstreams in NOTICE.md.
 OPERATIONS = {
     'Inventory': ('Inventory', '8337eb8541b314040b0edde0c09c5c7a2783ba1960aa9edfbf3bac16d0fec404'),
-    'Campaigns': ('ViewerDropsDashboard', 'c16bb890cc8ce7647a96ee69cd313d423a378a3dedadf630a1017cde18975feb'),
+    'Campaigns': ('ViewerDropsDashboard', '5a4da2ab3d5b47c9f9ce864e727b2cb346af1e3ea8b897fe8f704a97ff017619'),
     'Details': ('DropCampaignDetails', '039277bf98f3130929262cc7c6efd9c141ca3749cb6dca442fc8ead9a53f77c1'),
     'Available': ('DropsHighlightService_AvailableDrops', '782dad0f032942260171d2d80a654f88bdd0c5a9dddc392e9bc92218a0f42d20'),
     'Current': ('DropCurrentSessionContext', '4d06b702d25d652afb9ef835d2a550031f1cf762b193523a92166f40ea3d142b'),
@@ -47,7 +47,9 @@ class Twitch:
         if status != 200 or result.get('errors'):
             errors = str(result.get('errors', '')).lower()
             if any(x in errors for x in ['integrity', 'unauthorized', 'authenticated']):
-                raise ServiceError('Twitch 未开放此授权的掉宝读取能力；不绕过验证', 'capability_unavailable', 409)
+                if 'integrity' in errors:
+                    raise ServiceError('Twitch 要求完整性验证，此接口已停止自动请求；请在 Twitch 官方页面查看进度', 'integrity_required', 409)
+                raise ServiceError('Twitch 未开放此授权的掉宝读取能力', 'capability_unavailable', 409)
             raise ServiceError('Twitch 接口暂不可用或已变更，保留上次确认结果', 'capability_unavailable', 409)
         return result.get('data') or {}
 
@@ -77,14 +79,16 @@ class Twitch:
         user = data.get('currentUser')
         if not user or not isinstance(user.get('inventory'), dict):
             raise ServiceError('Twitch 暂未返回此账号的掉宝库存', 'capability_unavailable', 409)
+        if not isinstance(user['inventory'].get('dropCampaignsInProgress'), list):
+            raise ServiceError('Twitch 未返回账号的掉宝进度；不能视为没有活动或零进度', 'capability_unavailable', 409)
         return user['inventory']
 
     async def campaigns(self, account):
         data = await self.gql(account, operation='Campaigns', variables={'fetchRewardCampaigns': False})
         user = data.get('currentUser') or {}
-        if 'dropCampaigns' not in user:
+        if not isinstance(user.get('dropCampaigns'), list):
             raise ServiceError('Twitch 暂未返回掉宝活动目录', 'capability_unavailable', 409)
-        return user['dropCampaigns'] or []
+        return user['dropCampaigns']
 
     async def details(self, account, campaign_id):
         data = await self.gql(account, operation='Details', variables={'channelLogin': account['login'], 'dropID': campaign_id})

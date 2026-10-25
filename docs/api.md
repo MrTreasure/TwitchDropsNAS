@@ -11,7 +11,7 @@ Embedded gateways use the same handlers on an owner-only Unix socket, without th
 | POST | `/auth/cancel` | Cancel current device authorization |
 | POST | `/auth/disconnect` | Stop queue, clear local Twitch credentials, attempt remote revocation |
 | POST | `/control` | `{ "running": true/false }`; completed rounds require goals changed first |
-| PATCH | `/settings` | `{ "networkMode": "auto"/"direct"/"proxy" }`; proxy must already be configured at deployment |
+| PATCH | `/settings` | `{ "networkMode": "auto"/"direct"/"proxy", "checkMinSeconds": 600, "checkMaxSeconds": 1200 }`; proxy must already be configured at deployment |
 | POST | `/tasks` | Create a game task |
 | PUT | `/tasks/{id}` | Update task settings and optionally goals; omitted goals preserve existing selection |
 | DELETE | `/tasks/{id}` | Remove task |
@@ -59,3 +59,11 @@ Unauthenticated `GET /health` reports process health only. `/api/session` POST r
 Read before writing. Discover game/campaign/reward IDs through snapshots, never invent them. Handle HTTP 409 for unsupported capabilities/state changes and 429 cooldown by respecting service state; do not rotate proxies or retry around verification. No claim endpoint exists. Device approval and reward claims require the human.
 
 Poll only the NAS API, with increasing intervals (e.g. 2, 5, 10 seconds while syncing, then 30–60 seconds); do not repeatedly force Twitch refreshes. Do not log account tokens, device codes, bearer headers or user snapshots in public logs.
+
+## Public descriptions and randomized checks
+
+`announcements[]` contains manually verified public publisher notices with source URLs and verification times. These entries do not have Twitch reward IDs, account linkage, watched minutes or claim state; they never count as tracked goals or completion evidence.
+
+`schedule` exposes `metadataSource`, `metadataMinSeconds`, `metadataMaxSeconds`, `nextMetadataAt` (Unix seconds in internal mode) and `nextChannelAt` (Unix seconds). External schedules remain authoritative and report no fabricated next execution time. Settings allow a randomized idle-check range, integer seconds between 120 and 10800, minimum <= maximum. Older writes omitting the range retain it.
+
+A null campaign/inventory list means unavailable, not an empty list. Inventory and campaign discovery have independent capability flags and retry caches. A normal web request may require integrity verification even after device authorization succeeds; the service does not bypass it.

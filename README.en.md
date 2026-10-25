@@ -1,0 +1,137 @@
+# TwitchDropsNAS
+
+[简体中文](README.md) · English
+
+A NAS-oriented Twitch Drops manager with Docker, a reusable Web UI, per-game reward goals, and an API for agents and existing admin consoles. MIT licensed.
+
+> **Experimental status:** Docker, the UI, and the management API have been verified. The current device authorization has not returned the campaign catalogue or personal Drops progress; normal web queries can require an integrity check. Successful authorization does not establish that Drops tracking works. Actual reward progress has not been validated during an eligible live stream. When personal progress is unavailable, automatic completion cannot be relied on.
+
+## Screenshots
+
+Captured from an isolated demo instance with no real Twitch account connected. They contain no personal nickname, NAS address, device code, or secret. Public reward descriptions are not evidence of earned rewards or watched minutes.
+
+![Standalone dashboard with public reward descriptions and separate progress state](docs/images/dashboard.png)
+
+![Connection settings and randomized idle-check range](docs/images/check-settings.png)
+
+## Features
+
+- Official Twitch device authorization. Approve the code on Twitch; the NAS does not request your email or Twitch password.
+- One account and up to 12 prioritized game tasks, with configured channels and optional channel discovery.
+- Select all rewards in the current round or specific rewards from officially returned campaign data.
+- All-reward mode freezes one round. Future campaigns are not silently added.
+- Stop a goal after Twitch confirms it is claimed, claimable, or has reached the required watch time. All enabled tasks must have nonempty, achieved goals before the round ends.
+- Wait for manual prerequisite claims while other runnable goals continue. Claiming is always manual.
+- No video/audio/playlist downloads, browser playback, automatic claims, or hourly/daily traffic quotas.
+- Public publisher announcements and private account progress are displayed separately.
+- Reusable UI for standalone operation or embedding in an existing console.
+
+## Run with Docker
+
+```sh
+git clone https://github.com/MrTreasure/TwitchDropsNAS.git
+cd TwitchDropsNAS
+docker compose up -d --build
+# First installation only: read the generated management token in your own terminal.
+docker compose exec drops cat /data/admin-token
+```
+
+Open <http://127.0.0.1:8080>, sign in with the management token, connect Twitch, approve the official device authorization, synchronize, configure a game and its goals, and start the queue. If Twitch does not return a capability, the UI reports it as unavailable.
+
+For a remote NAS, an SSH tunnel keeps the default loopback binding:
+
+```sh
+ssh -L 8080:127.0.0.1:8080 user@your-nas
+```
+
+For an HTTPS reverse proxy, set `TDM_PUBLIC_ORIGIN=https://drops.example.com` and preserve the Host header. Browsers use an HttpOnly session cookie; agents use a management Bearer token. The management token and Twitch access token are different credentials.
+
+Data lives in the `drops-data` Docker volume. Back it up before upgrades. Do not use `docker compose down -v` for an ordinary upgrade. The container runs as UID/GID 1000:1000; prepare writable host bind mounts for that UID if replacing the named volume.
+
+## Network and low bandwidth
+
+The default policy probes direct connectivity anonymously and falls back only to an explicitly configured HTTP/HTTPS proxy. Without a proxy, a failed direct connection is reported; the service does not discover or change the system proxy.
+
+Copy `.env.example` to `.env` and set `TDM_PROXY_URL` to a proxy reachable from inside the container. Container `127.0.0.1` refers to the container itself.
+
+Alternatively, mount your original mihomo configuration and compatible binary read-only. Configure `TDM_PROXY_SOURCE`, `TDM_PROXY_NODE`, and `TDM_MIHOMO`. Only the selected node is used; an in-memory Linux memfd holds the temporary configuration. No provider credentials are shipped or copied into generated disk files.
+
+Idle channel checks default to a newly randomized 10–20 minute interval. The standalone metadata scheduler uses that range too. The external systemd example uses 10 minutes after the previous check finishes plus a random delay of up to 10 minutes, with a separate initial startup check. Random timing reduces synchronized requests; it is **not** a promise to avoid platform detection.
+
+Active viewing heartbeats retain their protocol timing. TLS connections are reused, channel lookups are batched, inventories are normally cached for 30 minutes, catalogues for one hour, and campaign metadata for six hours. Manual synchronization can refresh immediately. Failed capabilities use retry caching; verification challenges are not bypassed. Traffic measurements are not carrier billing figures, and external proxy overhead is estimated.
+
+## Goals and unknown progress
+
+1. **All rewards:** freeze the current visible campaign rewards. If metadata has not arrived, wait for the first complete set. Future campaigns are not added automatically.
+2. **Selected rewards:** choose known reward IDs belonging to the selected game. IDs are never invented from names or screenshots.
+3. **Completion:** trust Twitch-confirmed account data. Local elapsed time and successful watch POSTs do not establish watched minutes.
+4. **Prerequisites:** only the chosen goal's dependency chain blocks it. Other runnable branches remain eligible.
+5. **End of round:** persist completion after all enabled tasks have achieved their nonempty goals. Restarting does not restart a completed round. Change goals before beginning another round.
+6. **Unknown/expired:** an unavailable field, null list, or expired unfinished campaign is never treated as complete.
+
+Explicit watch-only mode is available after the user checks game linkage and channel eligibility. It does not guarantee Drops or automatic completion. VOD playback does not count; eligible live broadcasts are required.
+
+## Public announcements versus account progress
+
+`catalogue/announcements.json` contains manually checked public notices with source URLs and verification timestamps. The included War Thunder WTCS 2026 first-week notice lists five rewards from the publisher's official announcement; the activity window was checked against the Twitch listing.
+
+These records contain **no** personal watch time, claim state, account linkage, or Twitch reward IDs. They never enter automatic goal-completion logic. Administrators can add other games in the same format or configure `TDM_ANNOUNCEMENTS_FILE`.
+
+Campaign discovery, campaign details, and personal inventory have separate capability handling. A null response is not an empty catalogue. Data confirmed earlier retains its original source time. The service does not switch client identities, generate integrity tokens, or work around verification requirements.
+
+## Embed into an existing console
+
+Run the same Docker backend with `TDM_HTTP_PORT=0` and mount the owner-only Unix socket into a trusted gateway. The gateway retains its existing login, administrator checks, Origin checks, and method/path allowlist. Do not expose that socket directly.
+
+Export `ui/src/TwitchDrops.tsx` and its CSS with `scripts/export-ui.py`; pass `apiBase` and optional scheduler navigation props. Keep host login and navigation in a small wrapper. The standalone and embedded business components remain identical.
+
+See [embedding instructions](docs/embedding.md), [API documentation](docs/api.md), and [OpenAPI](docs/openapi.json).
+
+## Scheduling and agent integration
+
+Standalone scheduling exposes real enable/disable state and execution timestamps through `/api/automation`. Metadata synchronization and the watch queue are separate controls.
+
+If a host already uses cron, systemd, or a task registry, set `TDM_EXTERNAL_SCHEDULER=true`, retain exactly one native executor, and register/control that executor in the host's task console. The `deploy/` directory contains systemd examples. Disabling metadata synchronization does not stop viewing; use the queue's Pause action for that.
+
+The copyable [agent integration prompt](docs/agent-prompt.md) covers deployment, existing-console integration, official human approval, capability verification, goal selection, scheduling, and secret handling. Agents must not infer reward progress or bypass platform checks.
+
+## Configuration
+
+| Variable | Default / purpose |
+|---|---|
+| `TDM_DATA_DIR` | `/data`; private state and standalone credential storage |
+| `TDM_SOCKET` | `/run/twitch-drops/service.sock`; mode 0600 |
+| `TDM_HTTP_PORT` | `8080`; use `0` to disable standalone TCP/UI |
+| `TDM_HTTP_HOST` | `0.0.0.0` inside the container; Compose binds the host port to loopback |
+| `TDM_ADMIN_TOKEN` | Optional, at least 24 characters; otherwise generated in `/data/admin-token` |
+| `TDM_PUBLIC_ORIGIN` | Optional full origin for an HTTPS reverse proxy |
+| `TDM_PROXY_URL` | Optional explicit HTTP/HTTPS proxy; mutually exclusive with an embedded mihomo node |
+| `TDM_PROXY_SOURCE` / `TDM_PROXY_NODE` | Optional original mihomo config and explicit node name |
+| `TDM_MIHOMO` | `/usr/local/bin/mihomo`; mount your compatible binary read-only |
+| `TDM_PROXY_LABEL` | Optional non-sensitive label displayed by the UI |
+| `TDM_EXTERNAL_SCHEDULER` | `false`; use `true` for a single native scheduler |
+| `TDM_EXTERNAL_CHECK_MIN_SECONDS` / `TDM_EXTERNAL_CHECK_MAX_SECONDS` | Displayed external schedule range, default 600 / 1200; must reflect the real native schedule |
+| `TDM_ANNOUNCEMENTS_FILE` | Optional administrator-owned public announcement JSON |
+| `TDM_PASSWORD_BOOK` | Optional YAML host adapter modifying only `twitch_drops.account`; otherwise `/data/credentials.json` |
+
+The UI can configure the idle-check range. In standalone mode it also controls metadata synchronization; in external mode the native schedule remains authoritative.
+
+## Development
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+pnpm --dir ui install --frozen-lockfile
+pnpm --dir ui run build
+TDM_DATA_DIR=./data TDM_UI_DIR=./ui/dist TDM_SOCKET=./data/service.sock .venv/bin/python service.py
+```
+
+Routine verification: Python compilation, UI typecheck/build, container health and bounded API probes. Browser interaction acceptance is manual unless requested. Documentation screenshots use a separate demo instance, not a real user session.
+
+`Dockerfile` builds the UI inside Docker. After a local UI build, `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.0.1 .` is an alternative. Dependencies and the Node build image are pinned.
+
+## Privacy and license
+
+The repository contains this independent service, its reusable UI, and public documentation. It excludes deployment credentials, real account data, proxy nodes, NAS paths, databases, logs, and other backend source. Twitch public Client IDs and GraphQL query hashes are interoperability identifiers, not a user's AK or secret.
+
+This project is not affiliated with Twitch, Gaijin, or any game publisher. Reward eligibility, authorization capabilities, progress and fulfillment remain controlled by those platforms. See [NOTICE.md](NOTICE.md) for upstream attribution and [LICENSE](LICENSE) for the MIT license.

@@ -5,6 +5,7 @@ import datetime as dt
 import json
 import math
 import os
+import random
 import re
 import signal
 import sys
@@ -21,7 +22,7 @@ from transport import ServiceError, Transport
 from twitch import DEVICE_CLIENT, Twitch
 from webui import WebAccess
 
-DEFAULT_SETTINGS = {'networkMode': 'auto'}
+DEFAULT_SETTINGS = {'networkMode': 'auto', 'checkMinSeconds': 600, 'checkMaxSeconds': 1200}
 DEFAULT_TASK = {'id': 'war-thunder', 'game': {'id': None, 'name': 'War Thunder', 'slug': 'war-thunder'},
                 'enabled': True, 'priority': 100, 'watchOnly': False, 'autoChannels': False,
                 'channels': ['warthunder_esports', 'warthunder_esports_de', 'warthunder_esports_fr',
@@ -69,10 +70,13 @@ class DropsService:
         book_path = os.environ.get('TDM_PASSWORD_BOOK')
         self.book = SecretBook(book_path) if book_path else FileCredentials(Path(os.environ.get('TDM_DATA_DIR', '/data')) / 'credentials.json')
         self.account = self.book.read()
-        if self.store.get('settings') is None:
-            self.store.put('settings', DEFAULT_SETTINGS)
-        elif set(self.store.get('settings')) != {'networkMode'}:
-            self.store.put('settings', {'networkMode': self.store.get('settings').get('networkMode', 'auto')})
+        saved = self.store.get('settings', {})
+        self.store.put('settings', {k: saved.get(k, v) for k, v in DEFAULT_SETTINGS.items()})
+        if self.store.get('capabilitiesVersion') != 2:
+            self.store.put('inventoryFetchedAt', 0)
+            self.store.put('catalogueCache', {})
+            self.store.put('progress', {'status': 'unknown', 'sampledAt': None, 'catalogueAvailable': False, 'message': '等待重新核对账号进度读取能力'})
+            self.store.put('capabilitiesVersion', 2)
         if self.store.get('tasks') is None:
             self.store.put('tasks', [DEFAULT_TASK])
         tasks = self.store.get('tasks')
@@ -98,6 +102,8 @@ class DropsService:
         self.auth_requests = []
         self.background = []
         self.revision = 0
+        self.automation_changed = asyncio.Event()
+        self.announcements = self.load_announcements()
 
     def event(self, message, level='info'):
         self.store.event(message, level)
@@ -107,19 +113,45 @@ class DropsService:
         self.background = [asyncio.create_task(self.net.meter()), asyncio.create_task(self.engine())]
         self.event('掉宝服务已启动，使用显式配置的连接策略')
 
+    def check_delay(self):
+        settings = self.store.get('settings')
+        return random.uniform(settings['checkMinSeconds'], settings['checkMaxSeconds'])
+
+    def load_announcements(self):
+        path = Path(os.environ.get('TDM_ANNOUNCEMENTS_FILE', str(Path(__file__).parent / 'catalogue/announcements.json')))
+        if not path.exists():
+            return []
+        entries = json.loads(path.read_text())
+        if not isinstance(entries, list) or len(entries) > 100:
+            raise RuntimeError('公开活动说明文件无效')
+        # Administrator-owned data only. These records have no Twitch reward IDs,
+        # account progress or claim state, and never enter automatic goal evaluation.
+        return entries
+
     async def auto_sync(self):
-        # Standalone scheduler is controllable and exposes real execution results.
-        # Embedded deployments use their registered native timer instead.
+        async def check():
+            self.store.put('automationLastStarted', now())
+            try:
+                await self.scan()
+                self.store.put('automationLastStatus', 'success')
+            except Exception:
+                self.store.put('automationLastStatus', 'error')
+            self.store.put('automationLastFinished', now())
+        if self.store.get('automationEnabled', True):
+            await check()
         while True:
-            if self.store.get('automationEnabled', True):
-                self.store.put('automationLastStarted', now())
-                try:
-                    await self.scan()
-                    self.store.put('automationLastStatus', 'success')
-                except Exception:
-                    self.store.put('automationLastStatus', 'error')
-                self.store.put('automationLastFinished', now())
-            await asyncio.sleep(300)
+            enabled = self.store.get('automationEnabled', True)
+            delay = self.check_delay()
+            self.store.put('automationNextAt', time.time() + delay if enabled else None)
+            try:
+                if enabled:
+                    await asyncio.wait_for(self.automation_changed.wait(), timeout=delay)
+                else:
+                    await self.automation_changed.wait()
+                self.automation_changed.clear()
+            except asyncio.TimeoutError:
+                if self.store.get('automationEnabled', True):
+                    await check()
 
     async def stop(self):
         tasks = self.background + [x for x in [self.auth_task, self.scan_task] if x]
@@ -142,7 +174,18 @@ class DropsService:
         session_progress = self.store.get('currentProgress')
         if not self.account or not self.current or not session_progress or session_progress.get('accountId') != self.account['user_id'] or session_progress.get('channelId') != self.current['channel']['id'] or session_progress.get('streamId') != self.current['channel']['stream']['id']:
             session_progress = None
-        return {'account': account, 'authorization': {'pending': bool(self.pending), 'device': pending, 'error': self.auth_error},
+        settings = self.store.get('settings')
+        external = os.environ.get('TDM_EXTERNAL_SCHEDULER', 'false').lower() == 'true'
+        games = {str(t['game'].get('id')) for t in self.store.get('tasks')}
+        names = {t['game']['name'].casefold() for t in self.store.get('tasks')}
+        announcements = [a for a in self.announcements if (str(a['gameId']) in games or a['gameName'].casefold() in names) and (date_seconds(a.get('endsAt')) or 0) > time.time()]
+        return {'announcements': announcements, 'schedule': {
+            'metadataSource': 'external' if external else 'service',
+            'metadataMinSeconds': int(os.environ.get('TDM_EXTERNAL_CHECK_MIN_SECONDS', '600')) if external else settings['checkMinSeconds'],
+            'metadataMaxSeconds': int(os.environ.get('TDM_EXTERNAL_CHECK_MAX_SECONDS', '1200')) if external else settings['checkMaxSeconds'],
+            'nextMetadataAt': None if external else self.store.get('automationNextAt'),
+            'nextChannelAt': self.next_selection if self.next_selection > time.time() and self.store.get('running', False) else None},
+            'account': account, 'authorization': {'pending': bool(self.pending), 'device': pending, 'error': self.auth_error},
             'settings': self.store.get('settings'), 'running': self.store.get('running', False),
             'state': self.state, 'reason': self.reason, 'current': self.current,
             'goals': self.goal_states(), 'queueCompletedAt': self.store.get('queueCompletedAt'),
@@ -244,10 +287,13 @@ class DropsService:
                     'validatedAt': now(), 'expiresAt': time.time()+int(verified.get('expires_in', 0))}
                 self.book.write(account)
                 self.account = account
+                self.next_selection = 0
                 self.store.put('queueCompletedAt', None)
                 self.current = None
                 self.store.put('campaigns', [])
                 self.store.put('inventoryFetchedAt', 0)
+                self.store.put('inventoryFailedAt', 0)
+                self.store.put('catalogueFailedAt', 0)
                 self.store.put('catalogueCache', {})
                 self.store.put('currentProgress', None)
                 self.store.put('progress', {'status': 'unknown', 'sampledAt': None, 'message': '已连接，等待首次读取官方进度'})
@@ -343,7 +389,7 @@ class DropsService:
             return
         self.reason = str(error)
         self.state = 'error'
-        if error.code in ['login_required', 'verification_required', 'watch_rejected']:
+        if error.code in ['login_required', 'verification_required', 'watch_rejected', 'integrity_required']:
             self.store.put('running', False)
             self.current = None
         self.event(str(error), 'warning')
@@ -366,63 +412,75 @@ class DropsService:
                     task['game'] = checked['game']
             tasks = fresh_tasks
             self.store.put('tasks', tasks)
+            before_goals = self.goal_states()
+            before_campaigns = self.selection_metadata()
             old = self.store.get('progress', {})
-            try:
-                previous = {c['id']: c for c in self.store.get('campaigns', [])}
-                campaigns = dict(previous)
-                inventory_at = self.store.get('inventoryFetchedAt', 0)
-                sampled_at = old.get('sampledAt')
-                # CurrentDrop is the small five-minute progress check. The full
-                # inventory is reused for thirty minutes unless explicitly synced.
-                waiting_claim = any(g['blocked'] for g in self.goal_states())
-                if force or time.time()-inventory_at >= (300 if waiting_claim else 1800):
+            previous = {c['id']: c for c in self.store.get('campaigns', [])}
+            campaigns = dict(previous)
+            inventory_at = self.store.get('inventoryFetchedAt', 0)
+            sampled_at = old.get('sampledAt')
+            inventory_ok = old.get('status') == 'available'
+            inventory_message = old.get('message', '等待确认账号进度')
+            waiting_claim = any(g['blocked'] for g in self.goal_states())
+            retry_inventory = force or time.time() - self.store.get('inventoryFailedAt', 0) >= 3600
+            if retry_inventory and (force or time.time()-inventory_at >= (300 if waiting_claim else 1800)):
+                try:
                     inventory = await self.twitch.inventory(account)
                     sampled_at = now()
-                    for raw in inventory.get('dropCampaignsInProgress') or []:
+                    for raw in inventory['dropCampaignsInProgress']:
                         if raw.get('id'):
                             normalized = merge_progress(clean_campaign(raw, sampled_at), campaigns.get(str(raw['id']), {}))
                             normalized['metadataFetchedAt'] = previous.get(str(raw['id']), {}).get('metadataFetchedAt')
                             campaigns[str(raw['id'])] = normalized
                     self.store.put('inventoryFetchedAt', time.time())
-                catalogue_ok = True
-                try:
-                    cache = self.store.get('catalogueCache', {})
-                    if not force and cache.get('accountId') == account['user_id'] and time.time()-cache.get('at', 0) < 3600:
-                        catalogue = cache['items']
-                    else:
-                        catalogue = await self.twitch.campaigns(account)
-                        self.store.put('catalogueCache', {'accountId': account['user_id'], 'at': time.time(), 'items': catalogue})
-                    enabled_games = {str(t['game'].get('id')) for t in tasks if t['enabled']}
-                    target_campaigns = {r['campaignId'] for t in tasks if t['enabled'] for r in t['goal']['rewards']}
-                    candidates = [c for c in catalogue if str((c.get('game') or {}).get('id')) in enabled_games
-                                  and (c.get('status') == 'ACTIVE' or str(c.get('id')) in target_campaigns)]
-                    candidates.sort(key=lambda c: date_seconds(campaigns.get(str(c['id']), {}).get('metadataFetchedAt')) or 0)
-                    candidates = candidates[:24]
-                    for candidate in candidates:
-                        existing = campaigns.get(str(candidate['id']), {})
-                        if not force and time.time()-(date_seconds(existing.get('metadataFetchedAt')) or 0) < 21600:
-                            continue
-                        detailed = await self.twitch.details(account, str(candidate['id']))
-                        if detailed:
-                            normalized = merge_progress(clean_campaign(detailed, now()), campaigns.get(str(candidate['id']), {}))
-                            normalized['metadataFetchedAt'] = now()
-                            campaigns[str(candidate['id'])] = normalized
+                    self.store.put('inventoryFailedAt', 0)
+                    inventory_ok, inventory_message = True, '已读取 Twitch 官方账号进度'
                 except ServiceError as error:
                     if error.code != 'capability_unavailable':
                         raise
+                    inventory_ok, inventory_message = False, str(error)
+                    self.store.put('inventoryFailedAt', time.time())
+            catalogue_ok = old.get('catalogueAvailable', False)
+            catalogue_message = old.get('catalogueMessage')
+            try:
+                cache = self.store.get('catalogueCache', {})
+                if not force and time.time()-self.store.get('catalogueFailedAt', 0) < 3600:
+                    catalogue = cache.get('items', [])
                     catalogue_ok = False
-                if self.account is not account:
-                    return {'checked': False, 'accountChanged': True}
-                self.store.put('campaigns', list(campaigns.values()))
-                self.store.put('progress', {'status': 'available', 'sampledAt': sampled_at,
-                    'catalogueAvailable': catalogue_ok,
-                    'message': '已读取 Twitch 官方库存' if catalogue_ok else '库存可读，活动目录暂不可读；未发现的活动状态未知'})
+                elif not force and cache.get('accountId') == account['user_id'] and time.time()-cache.get('at', 0) < 3600:
+                    catalogue = cache['items']
+                    catalogue_ok = True
+                else:
+                    catalogue = await self.twitch.campaigns(account)
+                    self.store.put('catalogueCache', {'accountId': account['user_id'], 'at': time.time(), 'items': catalogue})
+                    self.store.put('catalogueFailedAt', 0)
+                    catalogue_ok, catalogue_message = True, None
+                enabled_games = {str(t['game'].get('id')) for t in tasks if t['enabled']}
+                target_campaigns = {r['campaignId'] for t in tasks if t['enabled'] for r in t['goal']['rewards']}
+                candidates = [c for c in catalogue if str((c.get('game') or {}).get('id')) in enabled_games
+                              and (c.get('status') == 'ACTIVE' or str(c.get('id')) in target_campaigns)]
+                candidates.sort(key=lambda c: date_seconds(campaigns.get(str(c['id']), {}).get('metadataFetchedAt')) or 0)
+                for candidate in candidates[:24]:
+                    existing = campaigns.get(str(candidate['id']), {})
+                    if not force and time.time()-(date_seconds(existing.get('metadataFetchedAt')) or 0) < 21600:
+                        continue
+                    detailed = await self.twitch.details(account, str(candidate['id']))
+                    if detailed:
+                        normalized = merge_progress(clean_campaign(detailed, now()), campaigns.get(str(candidate['id']), {}))
+                        normalized['metadataFetchedAt'] = now()
+                        campaigns[str(candidate['id'])] = normalized
             except ServiceError as error:
-                if self.account is not account:
-                    return {'checked': False, 'accountChanged': True}
                 if error.code != 'capability_unavailable':
                     raise
-                self.store.put('progress', {**old, 'status': 'unavailable', 'message': str(error), 'failedAt': now()})
+                catalogue_ok, catalogue_message = False, str(error)
+                self.store.put('catalogueFailedAt', time.time())
+            if self.account is not account:
+                return {'checked': False, 'accountChanged': True}
+            self.store.put('campaigns', list(campaigns.values()))
+            self.store.put('progress', {'status': 'available' if inventory_ok else 'unavailable',
+                'sampledAt': sampled_at, 'catalogueAvailable': catalogue_ok,
+                'catalogueMessage': catalogue_message, 'message': inventory_message,
+                'failedAt': None if inventory_ok else (dt.datetime.fromtimestamp(self.store.get('inventoryFailedAt'), dt.timezone.utc).isoformat() if self.store.get('inventoryFailedAt') else old.get('failedAt'))})
             if self.current and self.account is account:
                 try:
                     official = await self.twitch.current(account, self.current['channel'])
@@ -444,9 +502,14 @@ class DropsService:
             self.capture_goals()
             self.finish_if_complete()
             self.store.put('lastSync', now())
-            self.next_selection = 0
-            self.event('完成一次官方状态检查；不可读取的字段保留未知')
+            if before_goals != self.goal_states() or before_campaigns != self.selection_metadata():
+                self.next_selection = 0
+            self.event('完成一次资料检查；不可读取的字段保留未知')
             return {'checked': True, 'connected': True, 'progress': self.store.get('progress')['status']}
+
+    def selection_metadata(self):
+        return [{k: c.get(k) for k in ['id', 'gameId', 'startsAt', 'endsAt', 'linked', 'allowChannels']}
+                for c in self.store.get('campaigns', [])]
 
     def active_campaigns(self, task):
         current = time.time()
@@ -456,7 +519,7 @@ class DropsService:
     async def select_channel(self):
         async with self.selection_lock:
             revision, account = self.revision, self.account
-            self.next_selection = time.time()+300
+            self.next_selection = time.time()+self.check_delay()
             tasks = sorted((t for t in self.store.get('tasks') if t['enabled']), key=lambda t: -t['priority'])
             reason = '暂无启用的游戏任务'
             for task in tasks:
@@ -690,7 +753,13 @@ async def main():
             raise ServiceError('网络模式无效')
         if body['networkMode'] == 'proxy' and not service.net.proxy.url:
             raise ServiceError('请先通过 TDM_PROXY_URL 或 mihomo 环境变量配置代理')
-        service.store.put('settings', {key: body[key] for key in DEFAULT_SETTINGS})
+        updated = {**service.store.get('settings'), **{k: body[k] for k in DEFAULT_SETTINGS if k in body}}
+        minimum, maximum = updated['checkMinSeconds'], updated['checkMaxSeconds']
+        if type(minimum) is not int or type(maximum) is not int or not 120 <= minimum <= maximum <= 10800:
+            raise ServiceError('随机检查间隔需为 2–180 分钟，最短不能大于最长')
+        service.store.put('settings', updated)
+        service.next_selection = time.time()+service.check_delay()
+        service.automation_changed.set()
         service.net.route = 'unknown'
         service.net.last_direct_probe = 0
         service.event('已更新连接设置；按低流量方式持续运行，不设流量额度')
@@ -736,7 +805,11 @@ async def main():
 
     async def sync(request):
         if request.path == '/internal/scan':
-            return web.json_response(await service.scan())
+            try:
+                return web.json_response(await service.scan())
+            except ServiceError as error:
+                service.record_error(error)
+                raise
         service.queue_scan()
         return web.json_response(service.snapshot(actor(request)), status=202)
 
@@ -749,13 +822,17 @@ async def main():
             if type(body.get('enabled')) is not bool:
                 raise ServiceError('enabled 必须是布尔值')
             service.store.put('automationEnabled', body['enabled'])
-        return web.json_response({'source': 'external' if external else 'service', 'intervalSeconds': 300,
+            service.store.put('automationNextAt', None)
+            service.automation_changed.set()
+        return web.json_response({'source': 'external' if external else 'service', 'intervalMinSeconds': int(os.environ.get('TDM_EXTERNAL_CHECK_MIN_SECONDS', '600')) if external else service.store.get('settings')['checkMinSeconds'],
+            'intervalMaxSeconds': int(os.environ.get('TDM_EXTERNAL_CHECK_MAX_SECONDS', '1200')) if external else service.store.get('settings')['checkMaxSeconds'],
+            'nextRunAt': None if external else service.store.get('automationNextAt'),
             'timeZone': 'UTC', 'enabled': None if external else service.store.get('automationEnabled', True),
             'lastStartedAt': service.store.get('automationLastStarted'), 'lastFinishedAt': service.store.get('automationLastFinished'),
             'lastStatus': service.store.get('automationLastStatus', 'unknown')})
 
     async def health(_request):
-        return web.json_response({'ok': True, 'version': '1.0.0'})
+        return web.json_response({'ok': True, 'version': '1.0.1'})
 
     app.router.add_get('/health', health)
     app.router.add_get('/automation', automation)
