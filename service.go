@@ -319,7 +319,7 @@ func (s *Service) snapshotLocked(actor string) M {
 		scope := obj(v)
 		scopes = append(scopes, M{"id": scope["id"], "name": scope["name"], "gameName": scope["gameName"], "rewardCount": len(list(scope["rewards"]))})
 	}
-	return M{"campaignDirectory": s.campaignDirectoryLocked(), "announcements": a, "rewardImageScopes": scopes, "schedule": M{"metadataSource": source, "metadataMinSeconds": minSeconds, "metadataMaxSeconds": maxSeconds, "nextMetadataAt": nextMetadata, "nextChannelAt": nextChannel, "queryPlan": s.queryPlanLocked(unixNow())}, "account": account, "authorization": M{"pending": s.pending != nil, "device": device, "error": s.authError, "reconnectRequired": s.account != nil && flag(s.store.Get("authorizationReconnectRequired", false))}, "settings": settings, "running": s.store.Get("running", false), "state": s.state, "reason": s.reason, "current": clone(s.current), "goals": s.goalStatesLocked(), "queueCompletedAt": s.store.Get("queueCompletedAt", nil), "tasks": tasks, "campaigns": c, "progress": s.store.Get("progress", M{"status": "unknown", "sampledAt": nil, "message": "连接 Twitch 后同步官方进度"}), "syncing": s.syncing.Load() || s.queued.Load(), "lastSync": s.store.Get("lastSync", nil), "lastWatchAt": s.lastWatch, "currentProgress": session, "watchReports": s.watchReports, "watchMethod": "hls_head", "playbackChecks": playbackChecks, "lastPlaybackAt": s.store.Get("lastPlaybackAt", nil), "network": s.net.network(), "traffic": s.net.usage(), "events": s.store.Events(), "sampledAt": now()}
+	return M{"campaignCatalogue": s.directoryStatusLocked(), "campaignDirectory": s.campaignDirectoryLocked(), "announcements": a, "rewardImageScopes": scopes, "schedule": M{"metadataSource": source, "metadataMinSeconds": minSeconds, "metadataMaxSeconds": maxSeconds, "nextMetadataAt": nextMetadata, "nextChannelAt": nextChannel, "queryPlan": s.queryPlanLocked(unixNow())}, "account": account, "authorization": M{"pending": s.pending != nil, "device": device, "error": s.authError, "reconnectRequired": s.account != nil && flag(s.store.Get("authorizationReconnectRequired", false))}, "settings": settings, "running": s.store.Get("running", false), "state": s.state, "reason": s.reason, "current": clone(s.current), "goals": s.goalStatesLocked(), "queueCompletedAt": s.store.Get("queueCompletedAt", nil), "tasks": tasks, "campaigns": c, "progress": s.store.Get("progress", M{"status": "unknown", "sampledAt": nil, "message": "连接 Twitch 后同步官方进度"}), "syncing": s.syncing.Load() || s.queued.Load(), "lastSync": s.store.Get("lastSync", nil), "lastWatchAt": s.lastWatch, "currentProgress": session, "watchReports": s.watchReports, "watchMethod": "hls_head", "playbackChecks": playbackChecks, "lastPlaybackAt": s.store.Get("lastPlaybackAt", nil), "network": s.net.network(), "traffic": s.net.usage(), "events": s.store.Events(), "sampledAt": now()}
 }
 func (s *Service) goalStatesLocked() []any {
 	campaigns := list(s.store.Get("campaigns", []any{}))
@@ -625,6 +625,7 @@ func (s *Service) scan(ctx context.Context, force bool) (result M, err error) {
 		}
 		catalogueOK = false
 		catalogueMessage = safeError(e)
+		_ = s.refreshPublicCatalogue(ctx)
 		updates["catalogueFailedAt"] = unixNow()
 	}
 	var failed any
@@ -662,6 +663,9 @@ func (s *Service) scan(ctx context.Context, force bool) (result M, err error) {
 			updates["currentProgress"] = M{"dropId": dropID, "minutes": minutes, "sampledAt": sampled, "streamId": obj(ch["stream"])["id"], "accountId": account["user_id"], "channelId": ch["id"]}
 			if minutes != nil {
 				for _, c := range campaigns {
+					if c["officialConfirmed"] == false {
+						continue
+					}
 					for _, v := range list(c["drops"]) {
 						d := obj(v)
 						if text(d["id"]) == dropID {

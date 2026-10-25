@@ -46,3 +46,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+## Public campaign discovery
+
+The optional runtime fallback uses public discovery metadata from
+https://twitch-drops-api.sunkwi.com/v2/drops. No catalogue snapshots or user data
+are distributed in this source tree or release archives. This service is not
+Twitch; its data cannot prove account linkage, progress, eligibility or claims.
+The compatibility limitation and fallback approaches were compared with the
+unmerged upstream proposals https://github.com/DevilXD/TwitchDropsMiner/pull/1174
+and https://github.com/DevilXD/TwitchDropsMiner/pull/1180. This implementation
+keeps official confirmation and anonymous public discovery separate.

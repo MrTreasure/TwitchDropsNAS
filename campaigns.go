@@ -15,12 +15,18 @@ func (s *Service) campaignDirectoryLocked() []any {
 		if id == "" || gameID == "" || gameName == "" {
 			return
 		}
-		row := M{"id": id, "name": c["name"], "gameId": gameID, "gameName": gameName, "startsAt": c["startsAt"], "endsAt": c["endsAt"], "status": c["status"], "linked": c["linked"], "rewardCount": len(list(c["drops"])), "detailsAvailable": len(list(c["drops"])) > 0, "sampledAt": sampled, "source": source}
+		row := M{"id": id, "name": c["name"], "gameId": gameID, "gameName": gameName, "startsAt": c["startsAt"], "endsAt": c["endsAt"], "status": c["status"], "linked": c["linked"], "rewardCount": len(list(c["drops"])), "detailsAvailable": len(list(c["drops"])) > 0, "sampledAt": sampled, "source": source, "officialConfirmed": c["officialConfirmed"] != false}
 		if i, ok := index[id]; ok {
 			rows[i] = row
 		} else {
 			index[id] = len(rows)
 			rows = append(rows, row)
+		}
+	}
+	for _, v := range list(obj(s.store.Get("publicCatalogueCache", M{}))["items"]) {
+		c := obj(v)
+		if timestamp(c["endsAt"]) > unixNow() {
+			put(c, "public_catalogue", c["sampledAt"])
 		}
 	}
 	cache := obj(s.store.Get("catalogueCache", M{}))
@@ -65,6 +71,29 @@ func (s *Service) previewCampaign(ctx context.Context, body M) error {
 	for _, v := range list(s.store.Get("campaigns", []any{})) {
 		c := obj(v)
 		if text(c["id"]) == id && len(list(c["drops"])) > 0 && unixNow()-timestamp(c["sampledAt"]) < 21600 {
+			s.mu.Unlock()
+			return nil
+		}
+	}
+	for _, v := range list(obj(s.store.Get("publicCatalogueCache", M{}))["items"]) {
+		c := obj(v)
+		if text(c["id"]) == id && timestamp(c["endsAt"]) > unixNow() {
+			campaigns := list(s.store.Get("campaigns", []any{}))
+			replaced := false
+			for i, v := range campaigns {
+				if text(obj(v)["id"]) == id {
+					if obj(v)["officialConfirmed"] != false && len(list(obj(v)["drops"])) > 0 {
+						s.mu.Unlock()
+						return nil
+					}
+					campaigns[i] = clone(c)
+					replaced = true
+				}
+			}
+			if !replaced {
+				campaigns = append(campaigns, clone(c))
+			}
+			s.store.Put("campaigns", campaigns)
 			s.mu.Unlock()
 			return nil
 		}

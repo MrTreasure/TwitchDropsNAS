@@ -33,7 +33,7 @@
             "description": "State or capability unavailable"
           }
         },
-        "description": "schedule.queryPlan exposes per-task published/custom stream windows, nextWakeAt in Unix seconds, UTC startsAt, source URL and state. Never derive stream start from campaign eligibility dates."
+        "description": "schedule.queryPlan exposes per-task published/custom stream windows, nextWakeAt in Unix seconds, UTC startsAt, source URL and state. Never derive stream start from campaign eligibility dates. campaignCatalogue describes public fallback discovery source/time/cache/error; campaignDirectory source=public_catalogue and officialConfirmed=false must never establish personal account state or completion."
       }
     },
     "/auth/start": {
@@ -557,7 +557,7 @@
     },
     "/tasks/preview": {
       "post": {
-        "summary": "Prepare known official campaign rewards for a task draft; does not start or create a task",
+        "summary": "Prepare campaign reward choices; public candidates remain unverified until Twitch confirmation",
         "requestBody": {
           "required": true,
           "content": {

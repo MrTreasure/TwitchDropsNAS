@@ -95,11 +95,11 @@ func (s *Service) selectChannel(ctx context.Context) error {
 		}
 		allowed := map[string]bool{}
 		channels := []any{}
-		for _, v := range campaigns {
-			for _, v := range list(obj(v)["allowChannels"]) {
+		for _, campaign := range campaigns {
+			for _, v := range list(obj(campaign)["allowChannels"]) {
 				login := strings.ToLower(text(obj(v)["login"]))
 				if login != "" && !allowed[login] {
-					allowed[login] = true
+					allowed[login] = obj(campaign)["officialConfirmed"] != false
 					channels = append(channels, login)
 				}
 			}
@@ -110,7 +110,7 @@ func (s *Service) selectChannel(ctx context.Context) error {
 			if e != nil && errorCode(e) != "capability_unavailable" {
 				return e
 			}
-			channels = append(channels, a...)
+			channels = append(a, channels...)
 		}
 		channels = unique(channels)
 		found, e := s.twitch.channels(ctx, channels)
@@ -124,6 +124,7 @@ func (s *Service) selectChannel(ctx context.Context) error {
 				continue
 			}
 			eligible := allowed[strings.ToLower(text(ch["login"]))]
+			confirmed := []any{}
 			if !eligible && len(campaigns) > 0 {
 				available, e := s.twitch.available(ctx, account, ch)
 				if e != nil && errorCode(e) != "capability_unavailable" {
@@ -132,6 +133,11 @@ func (s *Service) selectChannel(ctx context.Context) error {
 				for _, a := range available {
 					for _, c := range campaigns {
 						if text(obj(a)["id"]) == text(obj(c)["id"]) {
+							verified := confirmedChannelCampaign(obj(a), ch)
+							if text(verified["gameId"]) != text(obj(task["game"])["id"]) || len(list(verified["drops"])) == 0 {
+								continue
+							}
+							confirmed = append(confirmed, verified)
 							eligible = true
 						}
 					}
@@ -145,6 +151,19 @@ func (s *Service) selectChannel(ctx context.Context) error {
 			if !flag(s.store.Get("running", false)) || s.epoch != epoch || s.revision != revision || ctx.Err() != nil {
 				s.mu.Unlock()
 				return nil
+			}
+			if len(confirmed) > 0 {
+				stored := list(s.store.Get("campaigns", []any{}))
+				for _, v := range confirmed {
+					fresh := obj(v)
+					for i, v := range stored {
+						if text(obj(v)["id"]) == text(fresh["id"]) {
+							stored[i] = mergeProgress(fresh, obj(v))
+						}
+					}
+				}
+				s.store.Put("campaigns", stored)
+				s.captureGoalsLocked()
 			}
 			oldCh := obj(s.current["channel"])
 			changed := s.current == nil || text(oldCh["login"]) != text(ch["login"]) || text(s.current["taskId"]) != text(task["id"]) || text(obj(oldCh["stream"])["id"]) != text(stream["id"])

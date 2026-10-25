@@ -94,7 +94,7 @@ func evaluate(task M, campaigns []any, readable bool) M {
 			drops[text(d["id"])] = d
 		}
 		drop := drops[text(ref["dropId"])]
-		done := drop != nil && achieved(drop)
+		done := drop != nil && campaign["officialConfirmed"] != false && achieved(drop)
 		pending := done && !flag(drop["claimed"])
 		row := M{"campaignId": ref["campaignId"], "dropId": ref["dropId"], "name": first(drop["name"], "等待奖励资料"), "campaignName": first(campaign["name"], "等待活动资料"), "completed": done, "claimPending": pending}
 		status := "unknown"
@@ -107,6 +107,9 @@ func evaluate(task M, campaigns []any, readable bool) M {
 			status = "expired"
 		case timestamp(campaign["startsAt"]) > unixNow():
 			status = "upcoming"
+		case campaign["officialConfirmed"] == false:
+			status = "awaiting_verification"
+			runnable[text(campaign["id"])] = true
 		default:
 			status = dependencyState(drop, drops, map[string]bool{})
 			if status == "ready" {
@@ -133,6 +136,11 @@ func evaluate(task M, campaigns []any, readable bool) M {
 	case len(runnable) > 0:
 		if readable {
 			status = "ready"
+			for _, row := range rows {
+				if obj(row)["status"] == "awaiting_verification" {
+					status = "unknown"
+				}
+			}
 		}
 	case blocked > 0:
 		status = "waiting_claim"

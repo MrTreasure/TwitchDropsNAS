@@ -154,6 +154,9 @@ func (t *Transport) send(ctx context.Context, method, destination, route string,
 	if len(raw) > cap {
 		return 0, nil, fault("上游响应超过大小限制，已停止读取", "response_limit", 502)
 	}
+	if destination == publicCatalogueURL && (response.StatusCode == 429 || response.StatusCode == 403 || response.StatusCode == 503) {
+		return response.StatusCode, nil, fault("公共活动目录暂不可用，保留缓存；Twitch 观看继续", "catalogue_unavailable", 409)
+	}
 	if response.StatusCode == 429 {
 		t.mu.Lock()
 		t.blockedUntil = unixNow() + 900
@@ -181,8 +184,16 @@ func (t *Transport) send(ctx context.Context, method, destination, route string,
 }
 func (t *Transport) request(ctx context.Context, method, destination string, headers M, form url.Values, payload any, cap int) (int, M, error) {
 	u, e := url.Parse(destination)
+	public := destination == publicCatalogueURL && method == "GET" && payload == nil && form == nil
+	if public {
+		for k := range headers {
+			if strings.EqualFold(k, "Authorization") || strings.EqualFold(k, "Cookie") || strings.EqualFold(k, "Client-ID") {
+				return 0, nil, fault("公共目录禁止携带 Twitch 凭据", "invalid_destination", 400)
+			}
+		}
+	}
 	playback := e == nil && twitchPlaybackDestination(method, u)
-	if e != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" || (u.Port() != "" && u.Port() != "443") || !(u.Hostname() == "id.twitch.tv" || u.Hostname() == "gql.twitch.tv" || u.Hostname() == "spade.twitch.tv" || playback) {
+	if e != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" || (u.Port() != "" && u.Port() != "443") || !(u.Hostname() == "id.twitch.tv" || u.Hostname() == "gql.twitch.tv" || u.Hostname() == "spade.twitch.tv" || playback || public) {
 		return 0, nil, fault("此服务只允许访问必要的 Twitch 接口", "invalid_destination", 400)
 	}
 	if strings.Contains(u.Path, "/integrity") || !playback && (strings.Contains(u.Path, ".m3u8") || strings.Contains(u.Path, ".mp4") || strings.Contains(u.Path, ".ts")) {
