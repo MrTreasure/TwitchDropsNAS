@@ -7,7 +7,9 @@ and watch-event interoperability were checked against:
 - https://github.com/1em0ntea/TwitchDropsMiner-Headless (MIT)
 - https://github.com/vocino/TwitchDropsMiner-CLI (MIT)
 
-This is an independent service. It has no browser, playback code,
+This is an independent service. Its low-traffic playback path follows the current
+DevilXD channel.py implementation: read HLS playlist metadata and issue segment
+HEAD requests without downloading video/audio bodies. It has no browser, decoder,
 automatic claim implementation or integrity-challenge workaround.
 
 ## War Thunder artwork

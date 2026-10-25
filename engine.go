@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"math"
+	"math/rand/v2"
 	"sort"
 	"strings"
 	"time"
@@ -22,7 +23,6 @@ func (s *Service) selectChannel(ctx context.Context) error {
 	s.mu.Lock()
 	revision, epoch := s.revision, s.epoch
 	account := obj(clone(s.account))
-	s.nextSelection = unixNow() + s.checkDelay()
 	tasks := []any{}
 	for _, v := range list(s.store.Get("tasks", []any{})) {
 		if flag(obj(v)["enabled"]) && flag(taskQueryPlan(obj(v), s.streamSchedules, unixNow(), s.current != nil && text(s.current["taskId"]) == text(obj(v)["id"]))["active"]) {
@@ -30,14 +30,7 @@ func (s *Service) selectChannel(ctx context.Context) error {
 		}
 	}
 	plan := s.queryPlanLocked(unixNow())
-	for _, v := range list(plan["tasks"]) {
-		if boundary := number(obj(v)["boundaryAt"]); boundary > unixNow() && boundary < s.nextSelection {
-			s.nextSelection = boundary
-		}
-	}
-	if next := number(plan["nextWakeAt"]); next > unixNow() && next < s.nextSelection {
-		s.nextSelection = next
-	}
+	s.nextSelection = nextChannelCheck(plan, unixNow(), s.checkDelay(), 60+rand.Float64()*60, s.current != nil)
 	campaignData := list(s.store.Get("campaigns", []any{}))
 	readable := text(obj(s.store.Get("progress", M{}))["status"]) == "available"
 	s.mu.Unlock()
@@ -160,12 +153,13 @@ func (s *Service) selectChannel(ctx context.Context) error {
 				eligibility = "confirmed"
 			}
 			s.current = M{"taskId": task["id"], "game": task["game"], "channel": ch, "eligibility": eligibility, "selectedAt": now()}
+			s.store.Put("watchResume", M{"accountId": account["user_id"], "current": s.current, "checkedAt": now()})
 			if changed {
-				s.nextWatch = unixNow() + 60
+				s.nextWatch = unixNow()
 				s.store.Event("已选择直播频道，开始等待观看上报间隔", "info")
 			}
 			s.state = "watching"
-			s.reason = "观看上报运行中；奖励进度以 Twitch 返回为准"
+			s.reason = "直播播放链路运行中；奖励进度以 Twitch 返回为准"
 			s.mu.Unlock()
 			return nil
 		}
@@ -177,6 +171,7 @@ func (s *Service) selectChannel(ctx context.Context) error {
 	defer s.mu.Unlock()
 	if s.epoch == epoch && s.revision == revision {
 		s.current = nil
+		s.store.Put("watchResume", nil)
 		s.state = "waiting"
 		s.reason = reason
 	}
@@ -273,7 +268,7 @@ func (s *Service) engineStep(ctx context.Context) (err error) {
 	}
 	account := obj(clone(s.account))
 	current := obj(clone(s.current))
-	s.nextWatch = unixNow() + 60
+	s.nextWatch = unixNow() + watchIntervalSeconds
 	s.mu.Unlock()
 	channel, e := s.twitch.channel(ctx, text(obj(current["channel"])["login"]))
 	if e != nil {
@@ -286,6 +281,7 @@ func (s *Service) engineStep(ctx context.Context) (err error) {
 	}
 	if len(obj(channel["stream"])) == 0 || text(obj(obj(channel["stream"])["game"])["id"]) != text(obj(current["game"])["id"]) {
 		s.current = nil
+		s.store.Put("watchResume", nil)
 		s.nextSelection = 0
 		s.mu.Unlock()
 		return nil
@@ -299,7 +295,7 @@ func (s *Service) engineStep(ctx context.Context) (err error) {
 	if s.revision == revision && s.epoch == epoch {
 		s.lastWatch = now()
 		s.watchReports++
-		s.store.Put("watchReports", s.watchReports)
+		s.store.PutMany(M{"watchReports": s.watchReports, "playbackChecks": number(s.store.Get("playbackChecks", 0)) + 1, "lastPlaybackAt": s.lastWatch, "watchResume": M{"accountId": account["user_id"], "current": s.current, "checkedAt": s.lastWatch}})
 		s.channelErrors = 0
 	}
 	return nil

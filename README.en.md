@@ -6,7 +6,7 @@ A self-hosted Twitch Drops manager with Docker, a reusable Web UI, per-game rewa
 
 Choose your own deployment target: your NAS/server or a compatible WorkBuddy execution environment. Each instance owns its user's accounts and data; it does not depend on the author's NAS, admin service, or proxy. WorkBuddy requires environment checks and has not been tested with this project. See [WorkBuddy deployment requirements](docs/workbuddy.md#english-summary) and the [agent prompt](docs/agent-prompt.md).
 
-> **Experimental status:** Docker, the UI, and the management API have been verified. The current device authorization has not returned the campaign catalogue or personal Drops progress; normal web queries can require an integrity check. Successful authorization does not establish that Drops tracking works. Actual reward progress has not been validated during an eligible live stream. When personal progress is unavailable, automatic completion cannot be relied on.
+> **Experimental status:** On 2026-10-25, a Linux amd64 deployment on a real War Thunder stream returned a valid reward ID, official watched minutes and reward goals. Viewing uses HLS playlist metadata and segment HEAD requests without media body downloads. Other games, authorization profiles and environments still require separate verification; full-round automatic stopping remains unverified. Campaign discovery can still return null. Unknown data is never treated as zero or completion, and integrity challenges are not bypassed.
 
 ## Screenshots
 
@@ -27,7 +27,7 @@ Captured from an isolated demo instance with no real Twitch account connected. T
 - All-reward mode freezes one round. Future campaigns are not silently added.
 - Stop a goal after Twitch confirms it is claimed, claimable, or has reached the required watch time. All enabled tasks must have nonempty, achieved goals before the round ends.
 - Wait for manual prerequisite claims while other runnable goals continue. Claiming is always manual.
-- No video/audio/playlist downloads, browser playback, automatic claims, or hourly/daily traffic quotas.
+- No video/audio segment downloads, browser playback, automatic claims, or hourly/daily traffic quotas. The watcher reads small HLS playlist metadata and sends HEAD requests to segments, following the current upstream playback path.
 - Public publisher announcements and private account progress are displayed separately.
 - Reusable UI for standalone operation or embedding in an existing console.
 

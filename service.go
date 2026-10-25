@@ -80,7 +80,7 @@ func newService(ctx context.Context) (*Service, error) {
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	s := &Service{store: store, book: book, account: account, net: newTransport(store, proxy), ctx: ctx, cancel: cancel, state: "paused", reason: "尚未开始挂机", automationChanged: make(chan struct{}, 1)}
-	s.twitch = &Twitch{s.net}
+	s.twitch = &Twitch{net: s.net}
 	settings := obj(store.Get("settings", M{}))
 	for k, v := range defaultSettings {
 		if settings[k] == nil {
@@ -130,6 +130,7 @@ func newService(ctx context.Context) (*Service, error) {
 		cancel()
 		return nil, e
 	}
+	s.restoreLiveCandidate(unixNow())
 	cleanup = false
 	return s, nil
 }
@@ -277,10 +278,13 @@ func (s *Service) snapshotLocked(actor string) M {
 	sp := obj(session)
 	ch := obj(s.current["channel"])
 	stream := obj(ch["stream"])
-	if s.account == nil || s.current == nil || session == nil || text(sp["accountId"]) != text(s.account["user_id"]) || text(sp["channelId"]) != text(ch["id"]) || text(sp["streamId"]) != text(stream["id"]) {
+	if s.account == nil || s.current == nil || session == nil || text(sp["dropId"]) == "" || text(sp["accountId"]) != text(s.account["user_id"]) || text(sp["channelId"]) != text(ch["id"]) || text(sp["streamId"]) != text(stream["id"]) {
 		session = nil
 	}
 	settings := s.store.Get("settings", defaultSettings)
+	// Historical watchReports includes retired statistical events; keep the new
+	// playback counter separate so old accepted posts never become HLS evidence.
+	playbackChecks := s.store.Get("playbackChecks", 0)
 	external := envBool("TDM_EXTERNAL_SCHEDULER")
 	minSeconds, maxSeconds := obj(settings)["checkMinSeconds"], obj(settings)["checkMaxSeconds"]
 	var nextMetadata any = s.store.Get("automationNextAt", nil)
@@ -315,7 +319,7 @@ func (s *Service) snapshotLocked(actor string) M {
 		scope := obj(v)
 		scopes = append(scopes, M{"id": scope["id"], "name": scope["name"], "gameName": scope["gameName"], "rewardCount": len(list(scope["rewards"]))})
 	}
-	return M{"announcements": a, "rewardImageScopes": scopes, "schedule": M{"metadataSource": source, "metadataMinSeconds": minSeconds, "metadataMaxSeconds": maxSeconds, "nextMetadataAt": nextMetadata, "nextChannelAt": nextChannel, "queryPlan": s.queryPlanLocked(unixNow())}, "account": account, "authorization": M{"pending": s.pending != nil, "device": device, "error": s.authError, "reconnectRequired": s.account != nil && flag(s.store.Get("authorizationReconnectRequired", false))}, "settings": settings, "running": s.store.Get("running", false), "state": s.state, "reason": s.reason, "current": clone(s.current), "goals": s.goalStatesLocked(), "queueCompletedAt": s.store.Get("queueCompletedAt", nil), "tasks": tasks, "campaigns": c, "progress": s.store.Get("progress", M{"status": "unknown", "sampledAt": nil, "message": "连接 Twitch 后同步官方进度"}), "syncing": s.syncing.Load() || s.queued.Load(), "lastSync": s.store.Get("lastSync", nil), "lastWatchAt": s.lastWatch, "currentProgress": session, "watchReports": s.watchReports, "network": s.net.network(), "traffic": s.net.usage(), "events": s.store.Events(), "sampledAt": now()}
+	return M{"announcements": a, "rewardImageScopes": scopes, "schedule": M{"metadataSource": source, "metadataMinSeconds": minSeconds, "metadataMaxSeconds": maxSeconds, "nextMetadataAt": nextMetadata, "nextChannelAt": nextChannel, "queryPlan": s.queryPlanLocked(unixNow())}, "account": account, "authorization": M{"pending": s.pending != nil, "device": device, "error": s.authError, "reconnectRequired": s.account != nil && flag(s.store.Get("authorizationReconnectRequired", false))}, "settings": settings, "running": s.store.Get("running", false), "state": s.state, "reason": s.reason, "current": clone(s.current), "goals": s.goalStatesLocked(), "queueCompletedAt": s.store.Get("queueCompletedAt", nil), "tasks": tasks, "campaigns": c, "progress": s.store.Get("progress", M{"status": "unknown", "sampledAt": nil, "message": "连接 Twitch 后同步官方进度"}), "syncing": s.syncing.Load() || s.queued.Load(), "lastSync": s.store.Get("lastSync", nil), "lastWatchAt": s.lastWatch, "currentProgress": session, "watchReports": s.watchReports, "watchMethod": "hls_head", "playbackChecks": playbackChecks, "lastPlaybackAt": s.store.Get("lastPlaybackAt", nil), "network": s.net.network(), "traffic": s.net.usage(), "events": s.store.Events(), "sampledAt": now()}
 }
 func (s *Service) goalStatesLocked() []any {
 	campaigns := list(s.store.Get("campaigns", []any{}))
@@ -643,6 +647,9 @@ func (s *Service) scan(ctx context.Context, force bool) (result M, err error) {
 		official, ce := s.twitch.current(ctx, account, obj(current["channel"]))
 		if ce != nil && errorCode(ce) != "capability_unavailable" {
 			return nil, ce
+		}
+		if ce == nil && len(official) == 0 {
+			updates["currentProgress"] = nil
 		}
 		if ce == nil && len(official) > 0 {
 			minutes := official["currentMinutesWatched"]

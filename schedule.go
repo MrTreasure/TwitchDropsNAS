@@ -12,6 +12,50 @@ const streamLeadSeconds = 300
 // This is a local late-start policy, not an asserted official stream end time.
 const streamLateSeconds = 3600
 
+// This is a candidate, never evidence of current liveness or reward progress.
+// The normal selection path immediately rechecks Twitch before sending any HEAD.
+func (s *Service) restoreLiveCandidate(at float64) {
+	resume := obj(s.store.Get("watchResume", nil))
+	current := obj(resume["current"])
+	checked := timestamp(resume["checkedAt"])
+	if !flag(s.store.Get("running", false)) || s.account == nil || text(resume["accountId"]) != text(s.account["user_id"]) || checked <= 0 || checked > at || at-checked > 1800 {
+		return
+	}
+	channel := obj(current["channel"])
+	if !channelPattern.MatchString(text(channel["login"])) || text(obj(channel["stream"])["id"]) == "" {
+		return
+	}
+	for _, v := range list(s.store.Get("tasks", []any{})) {
+		task := obj(v)
+		if flag(task["enabled"]) && text(task["id"]) == text(current["taskId"]) && text(obj(task["game"])["id"]) == text(obj(current["game"])["id"]) {
+			s.current = current
+			s.nextSelection, s.nextWatch = 0, 0
+			s.state, s.reason = "checking", "正在恢复并核对上次直播；尚未确认当前掉宝进度"
+			return
+		}
+	}
+}
+
+// A start-time query can precede Twitch publishing the live stream by seconds.
+// Bound discovery latency near known starts without polling between sessions.
+func nextChannelCheck(plan M, at, idleDelay, discoveryDelay float64, watching bool) float64 {
+	next := at + idleDelay
+	for _, v := range list(plan["tasks"]) {
+		p := obj(v)
+		start := timestamp(p["startsAt"])
+		if !watching && flag(p["active"]) && flag(p["known"]) && start > 0 && at >= start-streamLeadSeconds && at < start+900 {
+			next = min(next, at+discoveryDelay)
+		}
+		if boundary := number(p["boundaryAt"]); boundary > at {
+			next = min(next, boundary)
+		}
+	}
+	if wake := number(plan["nextWakeAt"]); wake > at {
+		next = min(next, wake)
+	}
+	return next
+}
+
 func loadStreamSchedules() ([]any, error) {
 	path := os.Getenv("TDM_STREAM_SCHEDULES_FILE")
 	var raw []byte

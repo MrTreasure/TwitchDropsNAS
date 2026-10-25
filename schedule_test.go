@@ -79,6 +79,74 @@ func TestBundledWTCSStreamTimes(t *testing.T) {
 	}
 }
 
+func TestChannelDiscoveryNearPublishedStart(t *testing.T) {
+	start, _ := time.Parse(time.RFC3339, "2026-10-25T13:50:00Z")
+	base := float64(start.Unix())
+	for _, c := range []struct {
+		name             string
+		offset, expected float64
+		known, watching  bool
+	}{
+		{"preflight", -300, 90, true, false},
+		{"start publication delay", 2, 90, true, false},
+		{"late stream publication", 899, 90, true, false},
+		{"after bounded discovery window", 900, 1000, true, false},
+		{"unknown schedule retains idle cadence", 2, 1000, false, false},
+		{"selected stream retains idle cadence", 2, 1000, true, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			at := base + c.offset
+			plan := M{"tasks": []any{M{"known": c.known, "active": true, "startsAt": start.Format(time.RFC3339)}}}
+			if got := nextChannelCheck(plan, at, 1000, 90, c.watching) - at; got != c.expected {
+				t.Fatalf("next query in %v seconds, want %v", got, c.expected)
+			}
+		})
+	}
+	// An off-air preflight result must still cause a query at the exact start.
+	at := base - 20
+	plan := M{"tasks": []any{M{"known": true, "active": true, "startsAt": start.Format(time.RFC3339), "boundaryAt": base}}}
+	if got := nextChannelCheck(plan, at, 1000, 90, false); got != base {
+		t.Fatalf("missed advertised start boundary: %v", got)
+	}
+	plan = M{"tasks": []any{}, "nextWakeAt": base}
+	if got := nextChannelCheck(plan, base-20, 1000, 90, false); got != base {
+		t.Fatalf("missed next session wakeup: %v", got)
+	}
+}
+
+func TestRecentLiveCandidateSurvivesRestartAfterStartGrace(t *testing.T) {
+	store, err := openStore(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer store.db.Close()
+	start, _ := time.Parse(time.RFC3339, "2026-10-25T13:50:00Z")
+	at := float64(start.Add(2 * time.Hour).Unix())
+	task := M{"id": "wt", "enabled": true, "game": M{"id": "66366", "name": "War Thunder"}, "goal": defaultGoal()}
+	current := M{"taskId": "wt", "game": task["game"], "channel": M{"login": "warthunder_esports", "stream": M{"id": "synthetic-stream"}}}
+	store.PutMany(M{"running": true, "tasks": []any{task}, "campaigns": []any{}, "watchResume": M{"accountId": "test-user", "current": current, "checkedAt": iso(at - 30)}})
+	s := &Service{store: store, account: M{"user_id": "test-user"}, streamSchedules: []any{M{"gameId": "66366", "sessions": []any{M{"startsAt": start.Format(time.RFC3339)}}}}}
+	s.restoreLiveCandidate(at)
+	if s.current == nil || s.nextSelection != 0 || s.state != "checking" || !flag(s.queryPlanLocked(at)["active"]) {
+		t.Fatal("restart discarded the recent stream after the schedule grace")
+	}
+	for _, c := range []struct {
+		name    string
+		uid     string
+		checked float64
+		running bool
+	}{{"other account", "other", at - 30, true}, {"stale candidate", "test-user", at - 1801, true}, {"paused", "test-user", at - 30, false}} {
+		t.Run(c.name, func(t *testing.T) {
+			store.PutMany(M{"running": c.running, "watchResume": M{"accountId": c.uid, "current": current, "checkedAt": iso(c.checked)}})
+			s.current = nil
+			s.restoreLiveCandidate(at)
+			if s.current != nil {
+				t.Fatal("unsafe candidate restored")
+			}
+		})
+	}
+}
+
 func TestUnscheduledGamesAndManualTimes(t *testing.T) {
 	task := M{"enabled": true, "game": M{"name": "Other Game"}}
 	if p := taskQueryPlan(task, nil, 0, false); !flag(p["active"]) || flag(p["known"]) {

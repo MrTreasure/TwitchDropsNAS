@@ -2,9 +2,8 @@ package main
 
 import (
 	"context"
-	"encoding/base64"
-	"net/url"
 	"strings"
+	"sync"
 )
 
 const webClient = "kimne78kx3ncx6brgo4mv6wki5h1ko"
@@ -13,13 +12,18 @@ const deviceClient = "ue6666qo983tsx6so1t0vnawi233wa"
 // Public interoperability identifiers from the upstreams credited in NOTICE.md.
 var operations = map[string][2]string{
 	"Inventory": {"Inventory", "8337eb8541b314040b0edde0c09c5c7a2783ba1960aa9edfbf3bac16d0fec404"},
-	"Campaigns": {"ViewerDropsDashboard", "5a4da2ab3d5b47c9f9ce864e727b2cb346af1e3ea8b897fe8f704a97ff017619"},
+	"Campaigns": {"ViewerDropsDashboard", "c16bb890cc8ce7647a96ee69cd313d423a378a3dedadf630a1017cde18975feb"},
 	"Details":   {"DropCampaignDetails", "039277bf98f3130929262cc7c6efd9c141ca3749cb6dca442fc8ead9a53f77c1"},
 	"Available": {"DropsHighlightService_AvailableDrops", "782dad0f032942260171d2d80a654f88bdd0c5a9dddc392e9bc92218a0f42d20"},
 	"Current":   {"DropCurrentSessionContext", "4d06b702d25d652afb9ef835d2a550031f1cf762b193523a92166f40ea3d142b"},
+	"Playback":  {"PlaybackAccessToken", "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9"},
 }
 
-type Twitch struct{ net *Transport }
+type Twitch struct {
+	net        *Transport
+	playbackMu sync.Mutex
+	playback   map[string]playbackEntry
+}
 
 func (t *Twitch) validate(ctx context.Context, token string) (M, error) {
 	status, r, e := t.net.request(ctx, "GET", "https://id.twitch.tv/oauth2/validate", M{"Authorization": "OAuth " + token}, nil, nil, 8192)
@@ -36,9 +40,14 @@ func (t *Twitch) gql(ctx context.Context, account M, query string, variables M, 
 	if account != nil {
 		client = text(account["client_id"])
 	}
-	headers := M{"Client-ID": client}
+	headers := M{"Client-ID": client, "Origin": "https://www.twitch.tv", "Referer": "https://www.twitch.tv/"}
 	if account != nil {
 		headers["Authorization"] = "OAuth " + text(account["access_token"])
+		if client == deviceClient {
+			headers["Origin"] = "https://android.tv.twitch.tv"
+			headers["Referer"] = "https://android.tv.twitch.tv/"
+			headers["User-Agent"] = "Mozilla/5.0 (Linux; Android 7.1; Smart Box C1) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36"
+		}
 	}
 	if variables == nil {
 		variables = M{}
@@ -148,7 +157,11 @@ func (t *Twitch) current(ctx context.Context, account, channel M) (M, error) {
 	if e != nil {
 		return nil, e
 	}
-	return obj(obj(r["currentUser"])["dropCurrentSession"]), nil
+	current := obj(obj(r["currentUser"])["dropCurrentSession"])
+	if text(current["dropID"]) == "" || !validNumber(current["currentMinutesWatched"]) {
+		return nil, nil
+	}
+	return current, nil
 }
 func (t *Twitch) available(ctx context.Context, account, channel M) ([]any, error) {
 	r, e := t.gql(ctx, account, "", M{"channelID": text(channel["id"])}, "Available")
@@ -171,21 +184,4 @@ func (t *Twitch) directory(ctx context.Context, game M) ([]any, error) {
 		}
 	}
 	return a, nil
-}
-func (t *Twitch) watch(ctx context.Context, account, channel M) error {
-	stream := obj(channel["stream"])
-	if len(stream) == 0 {
-		return fault("当前频道已离线", "channel_offline", 409)
-	}
-	game := obj(stream["game"])
-	events := []any{M{"event": "minute-watched", "properties": M{"broadcast_id": text(stream["id"]), "channel_id": text(channel["id"]), "channel": channel["login"], "client_time": now(), "game": text(game["name"]), "game_id": text(game["id"]), "hidden": false, "is_live": true, "live": true, "logged_in": true, "minutes_logged": 1, "muted": false, "user_id": account["user_id"]}}}
-	encoded := base64.StdEncoding.EncodeToString(bytesJSON(events))
-	status, _, e := t.net.request(ctx, "POST", "https://spade.twitch.tv/track", M{"Client-ID": account["client_id"], "Authorization": "OAuth " + text(account["access_token"])}, url.Values{"data": {encoded}}, nil, 8192)
-	if e != nil {
-		return e
-	}
-	if status != 204 {
-		return fault("观看上报未被接收，暂停并等待重新核对", "watch_rejected", 409)
-	}
-	return nil
 }

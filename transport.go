@@ -141,7 +141,10 @@ func (t *Transport) send(ctx context.Context, method, destination, route string,
 		return 0, nil, e
 	}
 	defer response.Body.Close()
-	raw, e := io.ReadAll(io.LimitReader(response.Body, int64(cap)+1))
+	var raw []byte
+	if method != "HEAD" {
+		raw, e = io.ReadAll(io.LimitReader(response.Body, int64(cap)+1))
+	}
 	if route == "direct" || t.proxy.Controller == 0 {
 		t.store.Traffic(unixNow(), route, int64(len(raw)+4096+requestBytes))
 	}
@@ -178,11 +181,12 @@ func (t *Transport) send(ctx context.Context, method, destination, route string,
 }
 func (t *Transport) request(ctx context.Context, method, destination string, headers M, form url.Values, payload any, cap int) (int, M, error) {
 	u, e := url.Parse(destination)
-	if e != nil || u.Scheme != "https" || u.User != nil || (u.Port() != "" && u.Port() != "443") || !(u.Hostname() == "id.twitch.tv" || u.Hostname() == "gql.twitch.tv" || u.Hostname() == "spade.twitch.tv" || u.Hostname() == "www.twitch.tv") {
+	playback := e == nil && twitchPlaybackDestination(method, u)
+	if e != nil || u.Scheme != "https" || u.User != nil || u.Fragment != "" || (u.Port() != "" && u.Port() != "443") || !(u.Hostname() == "id.twitch.tv" || u.Hostname() == "gql.twitch.tv" || u.Hostname() == "spade.twitch.tv" || playback) {
 		return 0, nil, fault("此服务只允许访问必要的 Twitch 接口", "invalid_destination", 400)
 	}
-	if u.Hostname() == "www.twitch.tv" || strings.Contains(u.Path, ".m3u8") || strings.Contains(u.Path, ".mp4") || strings.Contains(u.Path, ".ts") || strings.Contains(u.Path, "/integrity") {
-		return 0, nil, fault("服务禁止下载网页播放器、视频或请求验证绕过接口", "media_blocked", 400)
+	if strings.Contains(u.Path, "/integrity") || !playback && (strings.Contains(u.Path, ".m3u8") || strings.Contains(u.Path, ".mp4") || strings.Contains(u.Path, ".ts")) {
+		return 0, nil, fault("服务禁止下载视频音频正文或请求验证绕过接口", "media_blocked", 400)
 	}
 	select {
 	case t.slots <- struct{}{}:
