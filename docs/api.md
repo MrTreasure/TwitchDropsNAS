@@ -12,6 +12,7 @@ Embedded gateways use the same handlers on an owner-only Unix socket, without th
 | POST | `/auth/disconnect` | Stop queue, clear local Twitch credentials, attempt remote revocation |
 | POST | `/control` | `{ "running": true/false }`; completed rounds require goals changed first |
 | PATCH | `/settings` | `{ "networkMode": "auto"/"direct"/"proxy", "checkMinSeconds": 600, "checkMaxSeconds": 1200 }`; proxy must already be configured at deployment |
+| POST | `/tasks/preview` | `{ "campaignId": "FROM_SNAPSHOT_DIRECTORY" }`; prepare official campaign rewards for a draft, return snapshot; no task creation or queue start |
 | POST | `/tasks` | Create a game task |
 | PUT | `/tasks/{id}` | Update task settings and optionally goals; omitted goals preserve existing selection |
 | DELETE | `/tasks/{id}` | Remove task |
@@ -95,3 +96,11 @@ The existing metadata executor is retained. Outside query windows (or while the 
 The watcher follows the maintained upstream HLS path at approximately 20-second intervals: obtain the authorized live playback token, cache the lowest-bandwidth variant URL, fetch bounded playlist metadata, and send HEAD requests to the listed Twitch segments. Segment GETs, foreign hosts, automatic claims and integrity endpoints are forbidden. Tokens and signed URLs stay in memory and never enter snapshots or logs. Successful playback checks do not prove reward progress.
 
 A recently verified stream candidate is persisted per account and task. On restart, it is rechecked through Twitch before playback continues, including after the start-wait grace period. Stale, disabled, paused or cross-account candidates are rejected. This recovery is not an extra periodic scheduler.
+
+## Campaign selection
+
+`snapshot.campaignDirectory[]` merges the current account's cached catalogue with already known official inventory/detail campaigns. Entries contain id, name, gameId, gameName, startsAt, endsAt, linked, rewardCount, detailsAvailable, sampledAt and source. Catalogue sampledAt is Unix seconds; inventory/detail sampledAt is an ISO timestamp. Browsing snapshots makes no Twitch requests. A missing directory capability does not hide known inventory campaigns or imply no campaigns exist.
+
+`POST /tasks/preview` accepts only an ID already present in that account's directory. Fresh known rewards are reused; otherwise one official detail request is made, with a ten-second service-wide interval between uncached attempts and the normal transport cooldown. Concurrent metadata synchronization returns 409. An account change during the request rejects the result. Only official campaign metadata is stored; task goals, running state and stream selection are untouched. This does not establish inventory readability. Null or incomplete reward responses return 409.
+
+After preview, read `campaigns[]` and submit a normal task write with `goal.mode="selected"` and explicit official reward references. Choosing all rewards in one campaign is not the same as `goal.mode="all"`, which locks the game's currently active campaigns. For an existing game, merge desired references and update its task rather than creating a duplicate. Saving never starts a paused queue; explicitly use `/control` when the user selects Save and start.

@@ -203,3 +203,28 @@
 .drops-page[data-drops-style="war-thunder"] .drops-log time { color: var(--drops-wt-muted); opacity: 1; }
 .drops-page[data-drops-style="war-thunder"] :is(button,a,input,summary):focus-visible { outline: 2px solid var(--drops-wt-gold); outline-offset: 2px; }
 .drops-war-thunder-overlay :is(.drops-goal-help,.drops-image-import,.drops-auth-steps) { color: var(--drops-wt-body); }
+
+/* Compact desktop setup and activity selection, shared by both page themes. */
+.drops-setup { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border: 1px solid color-mix(in srgb, currentColor 14%, transparent); border-radius: 6px; background: var(--lab-panel, transparent); overflow: hidden; }
+.drops-setup > button, .drops-setup > a { appearance: none; display: flex; align-items: center; gap: 10px; min-width: 0; padding: 11px 14px; color: inherit; font: inherit; text-align: left; text-decoration: none; cursor: pointer; background: transparent; border: 0; border-inline-end: 1px solid color-mix(in srgb, currentColor 10%, transparent); }
+.drops-setup > :last-child { border-inline-end: 0; }
+.drops-setup > :hover { background: color-mix(in srgb, currentColor 5%, transparent); }
+.drops-setup > :disabled { opacity: .5; cursor: wait; }
+.drops-setup b { display: grid; place-items: center; width: 26px; height: 26px; flex: none; font-size: 12px; border: 1px solid color-mix(in srgb, currentColor 20%, transparent); border-radius: 4px; font-variant-numeric: tabular-nums; }
+.drops-setup span { display: grid; gap: 3px; min-width: 0; }
+.drops-setup strong { font-size: 12px; font-weight: 600; }
+.drops-setup small { font-size: 11px; opacity: .7; line-height: 1.5; }
+.drops-campaign-actions { display: flex; justify-content: flex-end; padding-top: 8px; }
+.drops-campaign-browser { display: grid; gap: 14px; padding-top: 12px; }
+.drops-browser-tools { display: flex; align-items: center; gap: 10px; }
+.drops-browser-tools .ant-input-search { flex: 1; min-width: 180px; }
+.drops-browser-tools .ant-select { width: 180px; flex: none; }
+.drops-browser-tools > a { font-size: 12px; white-space: nowrap; }
+.drops-browser-identity { display: grid; justify-items: start; gap: 4px; overflow-wrap: anywhere; font-size: 12px; }
+.drops-browser-identity strong { font-size: 13px; }
+.drops-browser-identity small { font-size: 11px; opacity: .7; }
+.drops-browser-footer { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.drops-browser-footer > span { font-size: 12px; opacity: .7; }
+.drops-draft-summary { margin-bottom: 18px; }
+.drops-page[data-drops-style="war-thunder"] .drops-setup { border-color: var(--drops-wt-metal); border-radius: 3px; }
+.drops-page[data-drops-style="war-thunder"] .drops-setup b { color: var(--drops-wt-gold); border-color: var(--drops-wt-metal); }

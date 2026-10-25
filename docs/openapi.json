@@ -554,6 +554,45 @@
           }
         }
       }
+    },
+    "/tasks/preview": {
+      "post": {
+        "summary": "Prepare known official campaign rewards for a task draft; does not start or create a task",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "campaignId"
+                ],
+                "properties": {
+                  "campaignId": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Private snapshot with official campaign reward metadata"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "409": {
+            "description": "Unknown campaign, account change, busy synchronization or capability unavailable"
+          },
+          "429": {
+            "description": "Uncached detail request cooldown"
+          }
+        }
+      }
     }
   },
   "components": {

@@ -63,3 +63,7 @@
 ## Reward images
 
 Read `rewardImageScopes` from the authenticated snapshot. Normal Twitch synchronization parses benefit image URLs automatically. If the capability is unavailable, ask the operator for public reward-region JSON/HTML exported from their normal Twitch page; never request cookies, passwords, or integrity tokens. Call `POST /reward-images/preview` with the exact scope and input, present matches/unmatched/conflicts, then import only after the operator confirms the mapping. Do not infer reward IDs, claim state or watched time from pictures. No code edit or redeployment is required; original allowed CDN URLs persist in SQLite. Details: `docs/reward-images.md`.
+
+### 添加活动任务的操作动线
+
+先读 `/snapshot` 的 `campaignDirectory`，让使用者按游戏/活动选择；需要奖励详情时调用 `/tasks/preview`，不要为列表每一项请求 Twitch。从返回的 `campaigns` 取真实 reward ID，提交普通 `/tasks` 或更新同一游戏已有任务。未明确替换时合并原目标并保留频道/查询计划。选择单个活动全部奖励使用 `goal.mode=selected` 与该活动实际引用，不要改为整个游戏的 all 模式。保存与开启队列是两步；使用者选择“保存并开始”后才调用 `/control`。目录不可读时说明列表不完整，可由使用者选择手动添加游戏；不从公开公告编造奖励 ID。

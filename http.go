@@ -238,6 +238,8 @@ func (w *Web) handler(trusted bool) http.Handler {
 			e = w.s.control(body)
 		case p == "/settings" && r.Method == "PATCH":
 			e = w.s.settings(body)
+		case p == "/tasks/preview" && r.Method == "POST":
+			e = w.s.previewCampaign(r.Context(), body)
 		case p == "/tasks" && r.Method == "POST":
 			e = w.s.saveTask(r.Context(), "", body)
 		case strings.HasPrefix(p, "/tasks/") && r.Method == "PUT":

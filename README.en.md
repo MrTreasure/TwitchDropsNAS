@@ -68,6 +68,18 @@ For an HTTPS reverse proxy, set `TDM_PUBLIC_ORIGIN=https://drops.example.com` an
 
 Data lives in the `drops-data` Docker volume. Back it up before upgrades. Do not use `docker compose down -v` for an ordinary upgrade. The container runs as UID/GID 1000:1000; prepare writable host bind mounts for that UID if replacing the named volume.
 
+## Add a watching task
+
+1. **Connect Twitch:** obtain the device code in the account panel and approve it on Twitch. Verify game account linking on the [official campaign page](https://www.twitch.tv/drops/campaigns).
+2. **Choose a campaign:** click **选择掉宝活动** (Choose Drops campaign) in the game task panel. Search by game or campaign; filter active, upcoming or all entries, then click **选择活动与奖励**. Use **同步活动资料** to request a refresh if needed, and wait for it to finish.
+3. **Review rewards:** the game is filled automatically and all rewards in this campaign are selected. Remove unwanted rewards. If that game already has a task, the new campaign is added to the draft alongside existing targets, preserving channel, priority and schedule settings. Changes apply only after saving.
+4. **Save and start:** click **保存并开始挂机** (Save and start). **保存任务** saves without starting a paused queue; **开始挂机** starts it later. A running queue continues after saving. Disabled tasks must be enabled explicitly.
+5. **Claim manually:** use the [official inventory](https://www.twitch.tv/drops/inventory). Claim prerequisites and synchronize so dependent goals can continue.
+
+One account supports up to **12 game tasks**, with multiple campaigns per game. **Only one channel is watched at a time**, with higher-priority runnable tasks first. The round ends when Twitch confirms every enabled task's nonempty goal set is achieved.
+
+**Incomplete directory:** Twitch may return inventory but no campaign catalogue. The UI reports this and lists only already obtained official campaigns. **手动添加游戏** (Add game manually) remains available: enter the Twitch game name and choose all current game rewards, which lock once official metadata is available. Publisher announcements cannot substitute for official reward IDs. Campaign validity dates are not stream start times. Screenshots illustrate themes; follow this section for the current button flow.
+
 ## Network and low bandwidth
 
 The default policy probes direct connectivity anonymously and falls back only to an explicitly configured HTTP/HTTPS proxy. Without a proxy, a failed direct connection is reported; the service does not discover or change the system proxy.
