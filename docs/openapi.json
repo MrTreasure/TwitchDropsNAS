@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "TwitchDropsNAS API",
-    "version": "1.0.1",
+    "version": "1.1.0",
     "description": "Single-account NAS Drops management; manual claiming only."
   },
   "servers": [
@@ -406,6 +406,150 @@
           },
           "409": {
             "description": "State or capability unavailable"
+          }
+        }
+      }
+    },
+    "/reward-images/preview": {
+      "post": {
+        "summary": "Preview scoped reward image matching",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope",
+                  "input"
+                ],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "description": "Exact rewardImageScopes[].id from the snapshot"
+                  },
+                  "input": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 16000
+                      },
+                      {
+                        "type": "array",
+                        "maxItems": 200,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "imageUrl": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "rewardKey": {
+                              "type": "string"
+                            },
+                            "contexts": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matching plan with matches, unmatched, invalid, conflicts, canApply; import also returns updated"
+          },
+          "400": {
+            "description": "Invalid metadata or input limits exceeded"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "409": {
+            "description": "Unknown activity scope or unresolved conflicts"
+          }
+        }
+      }
+    },
+    "/reward-images/import": {
+      "post": {
+        "summary": "Persist confirmed reward image metadata without changing progress",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "scope",
+                  "input"
+                ],
+                "properties": {
+                  "scope": {
+                    "type": "string",
+                    "description": "Exact rewardImageScopes[].id from the snapshot"
+                  },
+                  "input": {
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "maxLength": 16000
+                      },
+                      {
+                        "type": "array",
+                        "maxItems": 200,
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "type": "string"
+                            },
+                            "imageUrl": {
+                              "type": "string",
+                              "format": "uri"
+                            },
+                            "rewardKey": {
+                              "type": "string"
+                            },
+                            "contexts": {
+                              "type": "array",
+                              "items": {
+                                "type": "string"
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Matching plan with matches, unmatched, invalid, conflicts, canApply; import also returns updated"
+          },
+          "400": {
+            "description": "Invalid metadata or input limits exceeded"
+          },
+          "401": {
+            "description": "Authentication required"
+          },
+          "409": {
+            "description": "Unknown activity scope or unresolved conflicts"
           }
         }
       }

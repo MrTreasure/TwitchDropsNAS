@@ -14,6 +14,8 @@ NAS 上运行的 Twitch Drops 管理服务：低流量观看、多游戏队列�
 
 ![随机检查间隔与连接设置](docs/images/check-settings.png)
 
+![按活动预览匹配并持久化图片资料](docs/images/reward-image-import.png)
+
 ## 功能
 
 - Twitch 官方设备授权：在 Twitch 激活页登录，NAS 不接收邮箱密码。
@@ -110,7 +112,7 @@ TDM_DATA_DIR=./data TDM_UI_DIR=./ui/dist TDM_SOCKET=./data/service.sock .venv/bi
 
 常规验证：`python3 -m py_compile *.py`、`pnpm --dir ui run typecheck`、`pnpm --dir ui run build`、容器健康和有界 API 检查。UI 交互由人工验收，不默认运行浏览器自动化。
 
-完整 Dockerfile 在容器内构建 UI；已有本地 UI 构建时可用 `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.0.1 .`。Python / UI 依赖固定，Node 构建阶段采用固定版本。
+完整 Dockerfile 在容器内构建 UI；已有本地 UI 构建时可用 `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.1.0 .`。Python / UI 依赖固定，Node 构建阶段采用固定版本。
 
 ## 说明与许可证
 
@@ -121,6 +123,14 @@ TDM_DATA_DIR=./data TDM_UI_DIR=./ui/dist TDM_SOCKET=./data/service.sock .venv/bi
 `catalogue/announcements.json` 是人工核对、带来源与核对时间的公开活动说明。目前包含战雷 WTCS 2026 第一周的 5 项奖励，来源是发行商官方公告，活动窗口参考 Twitch 活动页。它不是从私人库存推断的结果，不含账号关联、观看分钟数、领取状态或 Twitch 奖励 ID，不进入自动目标完成判定。其他游戏可由管理员按同样结构补充公开说明。
 
 活动目录、活动详情和个人库存分别读取，接口字段必须是期望的列表类型；返回空值时显示能力未知／不可用，并保留真正确认过的数据。接口能力失败会退避缓存，手动同步可主动核对；遇完整性验证不会更换客户端头、生成校验令牌或绕过验证。
+
+奖励卡片直接引用官方 CDN 原始 HTTPS 地址；浏览器懒加载图片，不经过 NAS 图片代理，不下载或转存原图。公开说明使用 `rewards[].imageUrl`，官方进度使用 Twitch 返回的 `benefit.imageAssetURL`。没有图片或加载失败时保留奖励名称、时长及明确占位。新增其他图片域名时须同步核对后端、UI 与宿主 CSP 的允许列表。
+
+## 后续活动如何补充图片
+
+正常同步时自动解析 Twitch 奖励的 `benefit.imageAssetURL`，其他游戏使用相同流程。接口未提供图片时，点击顶部「奖励图片」：选择所属活动，按界面脚本从已展开的 Twitch 活动页提取 JSON，或粘贴奖励区域 HTML，然后预览并确认保存。按活动、奖励名称、别名或附近文字匹配；其他游戏不会混入，歧义、无效地址和同一奖励的地址冲突会明确列出。也可在 JSON 中改为准确的奖励名称后重新预览。
+
+导入结果只保存 CDN 地址及来源时间，持久化到 SQLite；无需改源码或重新部署。官方图片再次可读时优先使用官方数据。只有图片资料被更新，不会改变目标、观看分钟数、领取状态或授权。详细流程与 Agent API 见 [图片资料接入](docs/reward-images.md)。
 
 ## 隐私与开源边界
 

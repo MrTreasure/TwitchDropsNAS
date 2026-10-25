@@ -2,6 +2,7 @@
 
 - Python aiohttp backend; React + TypeScript + Vite UI. Use pnpm, exact dependency versions, and the committed lockfile.
 - `ui/src/TwitchDrops.tsx` is the reusable standalone/embedded UI. Keep host authentication, navigation, branding and deployment code outside this component.
+- The management UI targets desktop browsers. Do not add mobile layouts or mobile-specific acceptance work; retain the same desktop component when embedded.
 - Never commit tokens, proxy configuration, runtime SQLite data, user snapshots or deployment logs.
 - Completion uses Twitch-confirmed reward data only. A successful watch POST or local elapsed time is not proof of Drops progress.
 - Preserve unknown fields, source timestamps, account isolation and manual reward claiming.

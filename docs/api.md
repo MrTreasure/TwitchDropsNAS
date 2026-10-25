@@ -15,6 +15,8 @@ Embedded gateways use the same handlers on an owner-only Unix socket, without th
 | POST | `/tasks` | Create a game task |
 | PUT | `/tasks/{id}` | Update task settings and optionally goals; omitted goals preserve existing selection |
 | DELETE | `/tasks/{id}` | Remove task |
+| POST | `/reward-images/preview` | `{ scope, input }`; parse JSON or HTML and preview activity-scoped image matching |
+| POST | `/reward-images/import` | Revalidate and persist matched CDN URLs; no changes to progress, goals or account state |
 | POST | `/sync` | Start forced official refresh, returns 202; read `/snapshot` until `syncing=false` |
 | GET/PATCH | `/automation` | Query scheduler / `{ "enabled": true/false }`; external scheduler control returns 409 |
 | GET | `/openapi.json` | Machine-readable contract |
@@ -67,3 +69,9 @@ Poll only the NAS API, with increasing intervals (e.g. 2, 5, 10 seconds while sy
 `schedule` exposes `metadataSource`, `metadataMinSeconds`, `metadataMaxSeconds`, `nextMetadataAt` (Unix seconds in internal mode) and `nextChannelAt` (Unix seconds). External schedules remain authoritative and report no fabricated next execution time. Settings allow a randomized idle-check range, integer seconds between 120 and 10800, minimum <= maximum. Older writes omitting the range retain it.
 
 A null campaign/inventory list means unavailable, not an empty list. Inventory and campaign discovery have independent capability flags and retry caches. A normal web request may require integrity verification even after device authorization succeeds; the service does not bypass it.
+
+### Reward images
+
+Public announcement rewards have an optional `imageUrl` containing the original official CDN URL. Tracked campaign drops expose `images[]` with `{ name, url }` from Twitch benefit metadata; older cached drops may omit this array. Only approved public HTTPS CDN hosts are accepted. The backend never fetches image bodies or offers an image proxy. Browsers load the original URL lazily with no referrer; absent or failed images remain visibly labeled. Image availability is unrelated to account progress or reward completion.
+
+See [reward image ingestion](reward-images.md) for repeatable browser extraction, scope selection, matching, conflicts, persistence and automatic Twitch image parsing.

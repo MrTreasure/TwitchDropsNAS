@@ -12,7 +12,7 @@ FROM python:3.11-slim@sha256:0a236bf8f0b6013383df04d1cd02cb0abe5fbfa1a7012141d7f
 WORKDIR /app
 COPY --chmod=0444 requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt && mkdir -p /data /run/twitch-drops && chown 1000:1000 /data /run/twitch-drops
-COPY --chown=1000:1000 --chmod=0444 service.py twitch.py goals.py transport.py storage.py network_proxy.py webui.py ./
+COPY --chown=1000:1000 --chmod=0444 service.py twitch.py reward_images.py goals.py transport.py storage.py network_proxy.py webui.py ./
 COPY --from=ui-build --chown=1000:1000 /build/dist ./ui
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TDM_DATA_DIR=/data TDM_SOCKET=/run/twitch-drops/service.sock TDM_HTTP_PORT=8080
 COPY --chown=1000:1000 --chmod=0444 docs/openapi.json ./docs/openapi.json

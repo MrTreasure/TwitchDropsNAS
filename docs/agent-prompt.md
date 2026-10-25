@@ -47,3 +47,7 @@
 - 后续配置变更先读取当前状态，保留无关游戏和目标。管理 API 没有自动领取接口。
 
 ---
+
+## Reward images
+
+Read `rewardImageScopes` from the authenticated snapshot. Normal Twitch synchronization parses benefit image URLs automatically. If the capability is unavailable, ask the operator for public reward-region JSON/HTML exported from their normal Twitch page; never request cookies, passwords, or integrity tokens. Call `POST /reward-images/preview` with the exact scope and input, present matches/unmatched/conflicts, then import only after the operator confirms the mapping. Do not infer reward IDs, claim state or watched time from pictures. No code edit or redeployment is required; original allowed CDN URLs persist in SQLite. Details: `docs/reward-images.md`.

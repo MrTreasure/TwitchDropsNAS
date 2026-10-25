@@ -17,6 +17,7 @@ from aiohttp import web
 
 from goals import capture, default_goal, evaluate, merge_progress
 from network_proxy import ConfiguredProxy
+from reward_images import apply_import, preview_import, resolve_images, reward_image_url, scope_definitions
 from storage import FileCredentials, SecretBook, Store, now
 from transport import ServiceError, Transport
 from twitch import DEVICE_CLIENT, Twitch
@@ -47,9 +48,12 @@ def clean_campaign(raw, sampled_at):
         minutes = number(own.get('currentMinutesWatched'))
         required = number(drop.get('requiredMinutesWatched'))
         claimed = own.get('isClaimed') if isinstance(own.get('isClaimed'), bool) else None
-        benefits = [edge.get('benefit', {}).get('name', '') for edge in (drop.get('benefitEdges') or [])[:10]]
+        benefit_data = [(edge.get('benefit') or {}) for edge in (drop.get('benefitEdges') or [])[:10]]
+        benefits = [benefit.get('name', '') for benefit in benefit_data]
+        images = [{'name': str(benefit.get('name', ''))[:200], 'url': url}
+                  for benefit in benefit_data if (url := reward_image_url(benefit.get('imageAssetURL')))]
         drops.append({'id': str(drop.get('id', '')), 'name': str(drop.get('name', ''))[:200],
-            'benefits': [str(x)[:200] for x in benefits if x], 'minutes': minutes, 'requiredMinutes': required,
+            'benefits': [str(x)[:200] for x in benefits if x], 'images': images, 'minutes': minutes, 'requiredMinutes': required,
             'claimed': claimed, 'claimable': bool(own.get('dropInstanceID')) and claimed is False,
             'prerequisites': [str(x.get('id', '')) for x in (drop.get('preconditionDrops') or [])],
             'sampledAt': sampled_at})
@@ -124,9 +128,28 @@ class DropsService:
         entries = json.loads(path.read_text())
         if not isinstance(entries, list) or len(entries) > 100:
             raise RuntimeError('公开活动说明文件无效')
+        for entry in entries:
+            for reward in entry.get('rewards', []):
+                reward['imageUrl'] = reward_image_url(reward.get('imageUrl'))
         # Administrator-owned data only. These records have no Twitch reward IDs,
         # account progress or claim state, and never enter automatic goal evaluation.
         return entries
+
+    def image_scopes(self):
+        announcements, campaigns = resolve_images(self.announcements, self.store.get('campaigns', []), self.store.get('rewardImageRegistry', {}))
+        return scope_definitions(announcements, campaigns)
+
+    def image_import(self, body, save=False):
+        if not isinstance(body, dict) or not isinstance(body.get('scope'), str):
+            raise ServiceError('请选择图片所属活动')
+        scope = next((s for s in self.image_scopes() if s['id'] == body['scope']), None)
+        if not scope:
+            raise ServiceError('活动资料已变化，请重新选择活动', 'image_scope_missing', 409)
+        plan = preview_import(scope, body.get('input'))
+        if save:
+            plan['updated'] = apply_import(self.store, plan, now())
+            self.event('已导入活动奖励图片资料，仅保存原始 CDN 地址')
+        return plan
 
     async def auto_sync(self):
         async def check():
@@ -179,7 +202,10 @@ class DropsService:
         games = {str(t['game'].get('id')) for t in self.store.get('tasks')}
         names = {t['game']['name'].casefold() for t in self.store.get('tasks')}
         announcements = [a for a in self.announcements if (str(a['gameId']) in games or a['gameName'].casefold() in names) and (date_seconds(a.get('endsAt')) or 0) > time.time()]
-        return {'announcements': announcements, 'schedule': {
+        announcements, campaigns = resolve_images(announcements, self.store.get('campaigns', []), self.store.get('rewardImageRegistry', {}))
+        return {'announcements': announcements,
+            'rewardImageScopes': [{key: scope[key] for key in ['id', 'name', 'gameName']} | {'rewardCount': len(scope['rewards'])} for scope in self.image_scopes()],
+            'schedule': {
             'metadataSource': 'external' if external else 'service',
             'metadataMinSeconds': int(os.environ.get('TDM_EXTERNAL_CHECK_MIN_SECONDS', '600')) if external else settings['checkMinSeconds'],
             'metadataMaxSeconds': int(os.environ.get('TDM_EXTERNAL_CHECK_MAX_SECONDS', '1200')) if external else settings['checkMaxSeconds'],
@@ -189,7 +215,7 @@ class DropsService:
             'settings': self.store.get('settings'), 'running': self.store.get('running', False),
             'state': self.state, 'reason': self.reason, 'current': self.current,
             'goals': self.goal_states(), 'queueCompletedAt': self.store.get('queueCompletedAt'),
-            'tasks': self.store.get('tasks'), 'campaigns': self.store.get('campaigns', []),
+            'tasks': self.store.get('tasks'), 'campaigns': campaigns,
             'progress': self.store.get('progress', {'status': 'unknown', 'sampledAt': None, 'message': '连接 Twitch 后同步官方进度'}),
             'syncing': self.scan_lock.locked() or bool(self.scan_task and not self.scan_task.done()),
             'lastSync': self.store.get('lastSync'), 'lastWatchAt': self.last_watch, 'currentProgress': session_progress,
@@ -831,8 +857,11 @@ async def main():
             'lastStartedAt': service.store.get('automationLastStarted'), 'lastFinishedAt': service.store.get('automationLastFinished'),
             'lastStatus': service.store.get('automationLastStatus', 'unknown')})
 
+    async def reward_images(request):
+        return web.json_response(service.image_import(await request.json(), save=request.path.endswith('/import')))
+
     async def health(_request):
-        return web.json_response({'ok': True, 'version': '1.0.1'})
+        return web.json_response({'ok': True, 'version': '1.1.0'})
 
     app.router.add_get('/health', health)
     app.router.add_get('/automation', automation)
@@ -847,6 +876,8 @@ async def main():
     app.router.add_put('/tasks/{task_id}', save_task)
     app.router.add_delete('/tasks/{task_id}', delete_task)
     app.router.add_post('/sync', sync)
+    app.router.add_post('/reward-images/preview', reward_images)
+    app.router.add_post('/reward-images/import', reward_images)
     app.router.add_post('/internal/scan', sync)
     http_port = int(os.environ.get('TDM_HTTP_PORT', '8080'))
     if http_port:

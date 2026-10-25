@@ -36,3 +36,5 @@ import TwitchDrops from './TwitchDropsView';
 ## 私有凭据适配器
 
 默认使用独立 `/data/credentials.json`。已有 YAML 密码本的宿主可配置 `TDM_PASSWORD_BOOK`，仅存 `twitch_drops.account`。原子替换需要挂载所在目录；这会扩大容器可见范围，部署方可优先使用专用凭据目录。不在镜像、UI、源码、API 响应和日志中复制令牌。
+
+Reward picture ingestion uses the same authenticated adapter: allow POST to `/reward-images/preview` and `/reward-images/import` alongside existing service endpoints. Keep the original request-size limit, method checks, host session and Origin verification; the parser independently limits pasted text to 16 KiB. Do not proxy image bodies. Approved CDN addresses must be present in the host image CSP. See `docs/reward-images.md`.

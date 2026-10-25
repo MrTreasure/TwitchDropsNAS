@@ -21,27 +21,51 @@
       {
         "name": "50% Silver Lion Booster",
         "label": "50% 银狮加成",
-        "requiredMinutes": 30
+        "requiredMinutes": 30,
+        "imageUrl": "https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/6373f911-4934-4c97-a05b-8a6236541dcb.png",
+        "imageSourceUrl": "https://www.twitch.tv/drops/campaigns",
+        "imageVerifiedAt": "2026-10-25T04:01:06.773353+00:00",
+        "aliases": [
+          "50% SL Booster"
+        ]
       },
       {
         "name": "50% Research Point Booster",
         "label": "50% 研发点加成",
-        "requiredMinutes": 60
+        "requiredMinutes": 60,
+        "imageUrl": "https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/e30d115d-3f54-4972-b4be-0293e6fa1c0f.png",
+        "imageSourceUrl": "https://www.twitch.tv/drops/campaigns",
+        "imageVerifiedAt": "2026-10-25T04:01:06.773353+00:00",
+        "aliases": [
+          "50% RP Booster"
+        ]
       },
       {
         "name": "1 Day of Premium",
         "label": "1 天高级账号",
-        "requiredMinutes": 120
+        "requiredMinutes": 120,
+        "imageUrl": "https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/8eb00499-ede1-407c-93a6-9f5a8efe66ac.png",
+        "imageSourceUrl": "https://www.twitch.tv/drops/campaigns",
+        "imageVerifiedAt": "2026-10-25T04:01:06.773353+00:00"
       },
       {
         "name": "\"Vampir\" camouflage for the Bf 109 E-3",
         "label": "Bf 109 E-3“Vampir”涂装",
-        "requiredMinutes": 300
+        "requiredMinutes": 300,
+        "imageUrl": "https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/d5f8182a-1d10-44ee-a79d-b44fbddd7dba.png",
+        "imageSourceUrl": "https://www.twitch.tv/drops/campaigns",
+        "imageVerifiedAt": "2026-10-25T04:01:06.773353+00:00",
+        "aliases": [
+          "\"Vampir\" Bf 109 E-3"
+        ]
       },
       {
         "name": "Bf 109 E-3 Plane",
         "label": "Bf 109 E-3 掉宝载具",
-        "requiredMinutes": 600
+        "requiredMinutes": 600,
+        "imageUrl": "https://static-cdn.jtvnw.net/twitch-quests-assets/REWARD/ae4aaa49-1493-415a-9814-bf6befb00866.png",
+        "imageSourceUrl": "https://www.twitch.tv/drops/campaigns",
+        "imageVerifiedAt": "2026-10-25T04:01:06.773353+00:00"
       }
     ]
   }

@@ -14,6 +14,8 @@ Captured from an isolated demo instance with no real Twitch account connected. T
 
 ![Connection settings and randomized idle-check range](docs/images/check-settings.png)
 
+![Activity-scoped image import preview and persistent metadata](docs/images/reward-image-import.png)
+
 ## Features
 
 - Official Twitch device authorization. Approve the code on Twitch; the NAS does not request your email or Twitch password.
@@ -128,7 +130,15 @@ TDM_DATA_DIR=./data TDM_UI_DIR=./ui/dist TDM_SOCKET=./data/service.sock .venv/bi
 
 Routine verification: Python compilation, UI typecheck/build, container health and bounded API probes. Browser interaction acceptance is manual unless requested. Documentation screenshots use a separate demo instance, not a real user session.
 
-`Dockerfile` builds the UI inside Docker. After a local UI build, `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.0.1 .` is an alternative. Dependencies and the Node build image are pinned.
+`Dockerfile` builds the UI inside Docker. After a local UI build, `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.1.0 .` is an alternative. Dependencies and the Node build image are pinned.
+
+Reward cards reference the original official CDN HTTPS URLs directly. Browsers lazy-load the images; the NAS does not download, proxy, or rehost the originals. Public notices use `rewards[].imageUrl`; tracked rewards use Twitch-provided `benefit.imageAssetURL`. Missing or failed images keep a labeled placeholder and the reward text. Additional image domains require matching backend, UI, and host CSP allowlists.
+
+## Images for future campaigns
+
+Normal synchronization automatically parses Twitch `benefit.imageAssetURL` for every game. If images are missing, open **奖励图片** in the desktop UI, select the activity, paste exported Twitch page JSON or a reward-region HTML fragment, preview the matches, then confirm. Matching is scoped to one activity and uses names, registered aliases, or nearby labels. Unrelated entries, ambiguous names, invalid URLs, and conflicting URLs are listed explicitly. Correct the name in the JSON and preview again if needed.
+
+Only original CDN URLs and provenance timestamps are persisted in SQLite. No source edit or redeployment is needed. Fresh official images take precedence over imported fallbacks. Imports never change watch time, goals, claims, or authorization. See [repeatable image ingestion and agent API](docs/reward-images.md).
 
 ## Privacy and license
 

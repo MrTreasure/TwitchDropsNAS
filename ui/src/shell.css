@@ -2,10 +2,10 @@
 * { box-sizing: border-box; }
 body { margin: 0; }
 a { color: #486e58; text-underline-offset: 3px; }
-.standalone-shell { max-width: 1600px; padding: 28px; margin: auto; }
-.standalone-shell > header { display: flex; gap: 24px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
-h1 { font-size: 25px; margin: 0; }
-header p { color: #66756f; margin: 8px 0 0; }
+.standalone-shell { max-width: 1600px; padding: 20px; margin: auto; }
+.standalone-shell > header { display: flex; gap: 24px; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+h1 { font-size: 20px; margin: 0; }
+header p { color: #66756f; margin: 5px 0 0; font-size: 12px; }
 .wt-admin-panel { min-width: 0; padding: 20px; border: 1px solid #dce1da; border-radius: 12px; background: #fff; }
 .wt-admin-panel-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
 .wt-admin-panel h2 { margin: 0; font-size: 16px; }
