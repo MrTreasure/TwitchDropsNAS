@@ -20,6 +20,10 @@ func parsePublicCatalogue(payload M, at float64) ([]any, error) {
 			if id == "" || len(id) > 200 || seen[id] || len(items) >= 1000 || (raw["status"] != "ACTIVE" && raw["status"] != "UPCOMING") || timestamp(raw["startAt"]) <= 0 || timestamp(raw["endAt"]) <= at || timestamp(raw["endAt"]) <= timestamp(raw["startAt"]) {
 				continue
 			}
+			raw = obj(clone(raw))
+			game := obj(raw["game"])
+			game["name"] = first(game["name"], game["displayName"])
+			raw["game"] = game
 			c := cleanCampaign(raw, text(payload["lastUpdatedAt"]))
 			if text(c["gameId"]) == "" || text(c["gameName"]) == "" || len(list(c["drops"])) == 0 {
 				continue
@@ -41,7 +45,7 @@ func parsePublicCatalogue(payload M, at float64) ([]any, error) {
 // fetch per hour (including manual sync); failures back off for ten minutes.
 func (s *Service) refreshPublicCatalogue(ctx context.Context) error {
 	cache := obj(s.store.Get("publicCatalogueCache", M{}))
-	if unixNow()-number(cache["fetchedAt"]) < 3600 {
+	if number(cache["schemaVersion"]) == 1 && unixNow()-number(cache["fetchedAt"]) < 3600 {
 		return nil
 	}
 	if unixNow()-number(s.store.Get("publicCatalogueFailedAt", 0)) < 600 {
@@ -59,7 +63,7 @@ func (s *Service) refreshPublicCatalogue(ctx context.Context) error {
 		s.store.PutMany(M{"publicCatalogueFailedAt": unixNow(), "publicCatalogueError": safeError(err)})
 		return err
 	}
-	s.store.PutMany(M{"publicCatalogueCache": M{"fetchedAt": unixNow(), "sampledAt": payload["lastUpdatedAt"], "items": items}, "publicCatalogueFailedAt": 0, "publicCatalogueError": nil})
+	s.store.PutMany(M{"publicCatalogueCache": M{"schemaVersion": 1, "fetchedAt": unixNow(), "sampledAt": payload["lastUpdatedAt"], "items": items}, "publicCatalogueFailedAt": 0, "publicCatalogueError": nil})
 	return nil
 }
 

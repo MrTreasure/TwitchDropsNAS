@@ -6,9 +6,39 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"strings"
 	"testing"
 )
+
+// Opt-in compatibility check against a privately saved anonymous provider
+// response. No live user snapshot or provider response belongs in the repo.
+func TestPublicCatalogueProviderFixture(t *testing.T) {
+	path := os.Getenv("TDM_TEST_PUBLIC_CATALOGUE")
+	if path == "" {
+		t.Skip("no anonymous provider fixture supplied")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var payload M
+	if json.Unmarshal(raw, &payload) != nil {
+		t.Fatal("invalid provider JSON")
+	}
+	items, err := parsePublicCatalogue(payload, timestamp(payload["lastUpdatedAt"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	games := map[string]bool{}
+	for _, v := range items {
+		games[text(obj(v)["gameId"])] = true
+	}
+	if len(items) < 2 || len(games) < 2 {
+		t.Fatal("provider response did not produce multiple games/campaigns")
+	}
+	t.Logf("provider fixture: %d campaigns across %d games", len(items), len(games))
+}
 
 func TestPublicCampaignCanBeSelectedWithoutChangingTasks(t *testing.T) {
 	store, err := openStore(t.TempDir())
@@ -42,7 +72,7 @@ func TestPublicCampaignCanBeSelectedWithoutChangingTasks(t *testing.T) {
 
 func publicTestPayload() M {
 	drop := M{"id": "reward", "requiredMinutesWatched": 1, "self": M{"currentMinutesWatched": 999, "isClaimed": true, "dropInstanceID": "untrusted"}}
-	campaign := M{"id": "candidate", "name": "Synthetic campaign", "startAt": iso(unixNow() - 60), "endAt": iso(unixNow() + 3600), "status": "ACTIVE", "game": M{"id": "game", "name": "Synthetic game"}, "self": M{"isAccountConnected": true}, "allow": M{"isEnabled": true, "channels": []any{M{"id": "channel", "name": "synthetic"}}}, "timeBasedDrops": []any{drop}}
+	campaign := M{"id": "candidate", "name": "Synthetic campaign", "startAt": iso(unixNow() - 60), "endAt": iso(unixNow() + 3600), "status": "ACTIVE", "game": M{"id": "game", "displayName": "Synthetic game", "slug": "synthetic-game"}, "self": M{"isAccountConnected": true}, "allow": M{"isEnabled": true, "channels": []any{M{"id": "channel", "name": "synthetic"}}}, "timeBasedDrops": []any{drop}}
 	return M{"lastUpdatedAt": now(), "refreshIntervalSeconds": 60, "data": []any{M{"rewards": []any{campaign}}}}
 }
 
