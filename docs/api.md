@@ -60,7 +60,7 @@ Unauthenticated `GET /health` reports process health only. `/api/session` POST r
 
 Read before writing. Discover game/campaign/reward IDs through snapshots, never invent them. Handle HTTP 409 for unsupported capabilities/state changes and 429 cooldown by respecting service state; do not rotate proxies or retry around verification. No claim endpoint exists. Device approval and reward claims require the human.
 
-Poll only the NAS API, with increasing intervals (e.g. 2, 5, 10 seconds while syncing, then 30–60 seconds); do not repeatedly force Twitch refreshes. Do not log account tokens, device codes, bearer headers or user snapshots in public logs.
+Poll only the deployed service API, with increasing intervals (e.g. 2, 5, 10 seconds while syncing, then 30–60 seconds); do not repeatedly force Twitch refreshes. Do not log account tokens, device codes, bearer headers or user snapshots in public logs.
 
 ## Public descriptions and randomized checks
 
@@ -75,3 +75,7 @@ A null campaign/inventory list means unavailable, not an empty list. Inventory a
 Public announcement rewards have an optional `imageUrl` containing the original official CDN URL. Tracked campaign drops expose `images[]` with `{ name, url }` from Twitch benefit metadata; older cached drops may omit this array. Only approved public HTTPS CDN hosts are accepted. The backend never fetches image bodies or offers an image proxy. Browsers load the original URL lazily with no referrer; absent or failed images remain visibly labeled. Image availability is unrelated to account progress or reward completion.
 
 See [reward image ingestion](reward-images.md) for repeatable browser extraction, scope selection, matching, conflicts, persistence and automatic Twitch image parsing.
+
+## Authorization guidance
+
+`authorization.reconnectRequired` is an optional boolean for a confirmed expired/rejected account login; campaign/inventory capability failures do not set it. Missing accounts should be guided through `/auth/start` and Twitch device approval. Connected accounts with unreadable progress should be directed to official inventory and game linking, without promising another OAuth permission. See [authorization states](authorization.md).

@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "TwitchDropsNAS API",
-    "version": "1.1.0",
+    "version": "2.0.0",
     "description": "Single-account NAS Drops management; manual claiming only."
   },
   "servers": [

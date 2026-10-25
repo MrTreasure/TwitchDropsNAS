@@ -4,4 +4,4 @@ Description=TwitchDropsNAS official state check
 [Service]
 Type=oneshot
 Environment=TDM_SOCKET=%h/.local/share/twitch-drops/service.sock
-ExecStart=/usr/bin/python3 %h/TwitchDropsNAS/deploy/sync.py
+ExecStart=%h/TwitchDropsNAS/dist/twitch-drops sync

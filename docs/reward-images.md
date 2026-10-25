@@ -11,14 +11,14 @@ calculation. A readable picture does not imply readable account progress.
 ## Browser-page fallback
 
 If Twitch does not return images through the current authorization, open the
-ordinary Twitch campaign page and expand the relevant activity. In the NAS UI,
+ordinary Twitch campaign page and expand the relevant activity. In the service UI,
 choose **奖励图片**, select the activity, and expand **如何从 Twitch 页面批量提取**.
 Review and copy its extraction script, then run it in the Twitch page's developer
 console. It reads reward image names, original URLs and nearby labels, makes no
 network request and reads no cookies or credentials. Its `copy(...)` result is in
 the clipboard; the console may display `undefined`.
 
-Paste the exported JSON into the NAS dialog. A reward-region HTML fragment is
+Paste the exported JSON into the image-import dialog. A reward-region HTML fragment is
 also accepted: the backend only parses image attributes and nearby text, never
 executes or renders the supplied HTML. Input is limited to 16 KiB text / 200
 entries within the existing 32 KiB request boundary. Extract only the activity

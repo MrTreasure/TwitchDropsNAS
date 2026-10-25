@@ -2,7 +2,7 @@
 
 ## 只运行后端
 
-使用同一个 Docker 镜像，设置 `TDM_HTTP_PORT=0`，挂载持久化 `/data` 及宿主独占的 `/run/twitch-drops`。宿主的 API 网关使用 Unix socket 转发。例如将 `/api/twitch-drops/snapshot` 转为 socket 上的 `/snapshot`。宿主负责会话、管理员权限、Origin 检查，并传入经过验证的 `X-Drops-Actor`。此头仅受信 Unix socket 接受，HTTP 客户端不能借此跳过鉴权。
+使用同一个 Docker 镜像，设置 `TDM_WEB_UI=false`、`TDM_HTTP_PORT=0`，挂载持久化 `/data` 及宿主独占的 `/run/twitch-drops`。宿主的 API 网关使用 Unix socket 转发。例如将 `/api/twitch-drops/snapshot` 转为 socket 上的 `/snapshot`。宿主负责会话、管理员权限、Origin 检查，并传入经过验证的 `X-Drops-Actor`。此头仅受信 Unix socket 接受，HTTP 客户端不能借此跳过鉴权。
 
 只转发已列入 API 文档的路径和方法，不开放 `/internal/scan`。保持 JSON 响应 `Cache-Control: no-store`，不将账号、授权码、进度或状态放入公共 CDN 缓存。
 
@@ -25,11 +25,11 @@ import TwitchDrops from './TwitchDropsView';
 />
 ```
 
-独立 UI 与嵌入 UI 的业务组件保持字节一致；外层登录与导航放在独立适配器中。仓库 `scripts/export-ui.py` 将组件复制为宿主的 `TwitchDropsView.tsx`，不复制任何宿主源码回本项目。
+独立 UI 与嵌入 UI 的业务组件保持字节一致；外层登录与导航放在独立适配器中。仓库 `scripts/export-ui.mjs` 将组件复制为宿主的 `TwitchDropsView.tsx`，不复制任何宿主源码回本项目。
 
 ## 现有调度器
 
-设置 `TDM_EXTERNAL_SCHEDULER=true`。保留宿主原有、唯一的原生随机检查计划，调用 socket `/internal/scan`，以真实 HTTP 返回记录执行状态；禁用时阻止后续同步。`deploy/sync.py` 支持该调用。
+设置 `TDM_EXTERNAL_SCHEDULER=true`。保留宿主原有、唯一的原生随机检查计划，调用 socket `/internal/scan`，以真实 HTTP 返回记录执行状态；禁用时阻止后续同步。Go 程序的 `twitch-drops sync` 子命令支持该调用，不需要 Python。
 
 同步定时任务的停用不会停止观看心跳；页面的暂停才停止挂机。若宿主有统一任务登记，登记此原生计划并实际读回启停状态，避免重复计划。
 

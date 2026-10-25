@@ -2,7 +2,9 @@
 
 [简体中文](README.md) · English
 
-A NAS-oriented Twitch Drops manager with Docker, a reusable Web UI, per-game reward goals, and an API for agents and existing admin consoles. MIT licensed.
+A self-hosted Twitch Drops manager with Docker, a reusable Web UI, per-game reward goals, and an API for agents and existing admin consoles. MIT licensed.
+
+Choose your own deployment target: your NAS/server or a compatible WorkBuddy execution environment. Each instance owns its user's accounts and data; it does not depend on the author's NAS, admin service, or proxy. WorkBuddy requires environment checks and has not been tested with this project. See [WorkBuddy deployment requirements](docs/workbuddy.md#english-summary) and the [agent prompt](docs/agent-prompt.md).
 
 > **Experimental status:** Docker, the UI, and the management API have been verified. The current device authorization has not returned the campaign catalogue or personal Drops progress; normal web queries can require an integrity check. Successful authorization does not establish that Drops tracking works. Actual reward progress has not been validated during an eligible live stream. When personal progress is unavailable, automatic completion cannot be relied on.
 
@@ -18,7 +20,7 @@ Captured from an isolated demo instance with no real Twitch account connected. T
 
 ## Features
 
-- Official Twitch device authorization. Approve the code on Twitch; the NAS does not request your email or Twitch password.
+- Official Twitch device authorization. Approve the code on Twitch; the backend does not request your email or Twitch password.
 - One account and up to 12 prioritized game tasks, with configured channels and optional channel discovery.
 - Select all rewards in the current round or specific rewards from officially returned campaign data.
 - All-reward mode freezes one round. Future campaigns are not silently added.
@@ -103,6 +105,7 @@ The copyable [agent integration prompt](docs/agent-prompt.md) covers deployment,
 |---|---|
 | `TDM_DATA_DIR` | `/data`; private state and standalone credential storage |
 | `TDM_SOCKET` | `/run/twitch-drops/service.sock`; mode 0600 |
+| `TDM_WEB_UI` | `true`; disable standalone pages while retaining APIs and background tasks |
 | `TDM_HTTP_PORT` | `8080`; use `0` to disable standalone TCP/UI |
 | `TDM_HTTP_HOST` | `0.0.0.0` inside the container; Compose binds the host port to loopback |
 | `TDM_ADMIN_TOKEN` | Optional, at least 24 characters; otherwise generated in `/data/admin-token` |
@@ -118,19 +121,45 @@ The copyable [agent integration prompt](docs/agent-prompt.md) covers deployment,
 
 The UI can configure the idle-check range. In standalone mode it also controls metadata synchronization; in external mode the native schedule remains authoritative.
 
-## Development
+## Account authorization and unavailable progress
+
+The UI guides missing or expired accounts through official device authorization. A connected account with unreadable progress instead gets official inventory/game-linking links and clear guidance; no extra ordinary-viewer progress permission has been confirmed. Reauthorizing is not a guaranteed fix. See [authorization states](docs/authorization.md).
+
+## Release downloads and Web UI choice
+
+Release archives cover Linux amd64/arm64, Windows amd64/arm64, and macOS Intel/Apple Silicon, with SHA256SUMS. Verify the checksum before extracting. Running an archive needs no Python, Go, Node.js or Docker; consult release notes for actual platform validation status.
+
+Interactive terminal launches ask whether to start the standalone Web UI. For unattended launches, choose explicitly:
 
 ```sh
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-pnpm --dir ui install --frozen-lockfile
-pnpm --dir ui run build
-TDM_DATA_DIR=./data TDM_UI_DIR=./ui/dist TDM_SOCKET=./data/service.sock .venv/bin/python service.py
+./twitch-drops --web-ui=true
+./twitch-drops --web-ui=false
 ```
 
-Routine verification: Python compilation, UI typecheck/build, container health and bounded API probes. Browser interaction acceptance is manual unless requested. Documentation screenshots use a separate demo instance, not a real user session.
+Use `twitch-drops.exe` on Windows or set `TDM_WEB_UI=true/false`. Disabling the UI makes `/` and `/assets/*` return 404; authenticated APIs and background tasks continue. For an existing admin console, disable this standalone UI and reuse the embedded component. `TDM_HTTP_PORT=0` additionally disables TCP and requires a trusted Unix socket.
 
-`Dockerfile` builds the UI inside Docker. After a local UI build, `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.1.0 .` is an alternative. Dependencies and the Node build image are pinned.
+## Go executable and development
+
+The Go backend embeds its UI, public notices and OpenAPI document. Running it needs no Python, Node.js or separate SQLite service. Building from source needs Go 1.26.5, Node.js 26 and pnpm 12.3.4:
+
+```sh
+sh scripts/build.sh
+./dist/twitch-drops
+# In another private terminal after first startup; do not paste the token into chat
+cat data/admin-token
+```
+
+Native defaults: `127.0.0.1:8080`, private state in `./data`, Unix socket disabled. Set `TDM_DATA_DIR` for persistent storage; set `TDM_SOCKET` only for a trusted local gateway or native scheduler. A Windows-targeted build uses an `.exe` with no Unix socket. Cross compilation is verified; actual Windows/macOS runtime acceptance remains unverified. The optional embedded mihomo adapter needs Linux; other systems use direct access or an explicit HTTP/HTTPS proxy.
+
+Routine verification: `go vet ./...`, `go build ./...`, UI typecheck/build, and bounded health/API probes. Browser interaction acceptance is manual unless requested. Documentation screenshots use an isolated demo instance.
+
+`Dockerfile` builds UI and Go in separate build stages. After `sh scripts/build.sh`, use `docker build -f Dockerfile.runtime -t twitch-drops-nas:2.0.0 .` for the compact runtime image. Runtime images contain no Python, Node.js or Go compiler. Dependencies are pinned in `go.mod`, `go.sum` and the UI lockfile.
+
+## Upgrading from Python 1.x
+
+Go 2.x reads the existing SQLite schema, private JSON credentials or explicitly configured YAML adapter, and management token. Management cookie signatures and API paths remain compatible. Reward goals, unknown progress, imported image URLs and scheduler state are preserved.
+
+Stop the old instance and back up its private data directory/volume before upgrading. Run only one instance per directory and never delete the volume during an upgrade. Replace Python health commands with `twitch-drops health`, and the native scheduler command with `twitch-drops sync`; keep its unique schedule and verify registration/control. Old Python commands cannot run in the Go image. Keep Python 1.x sources and old images until Go acceptance, then remove them. Stop Go before rolling back to the previous image and private backup.
 
 Reward cards reference the original official CDN HTTPS URLs directly. Browsers lazy-load the images; the NAS does not download, proxy, or rehost the originals. Public notices use `rewards[].imageUrl`; tracked rewards use Twitch-provided `benefit.imageAssetURL`. Missing or failed images keep a labeled placeholder and the reward text. Additional image domains require matching backend, UI, and host CSP allowlists.
 

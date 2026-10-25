@@ -106,3 +106,9 @@
 .drops-diagnostics { margin-top: 12px; font-size: 12px; }
 .drops-diagnostics summary { cursor: pointer; opacity: .7; }
 .drops-diagnostics .drops-facts { margin-bottom: 0; }
+
+.drops-progress-guidance p { margin: 0 0 8px; line-height: 1.7; }
+.drops-progress-guidance .drops-actions { gap: 8px 14px; font-size: 12px; }
+.drops-auth-steps { padding-inline-start: 22px; margin-block: 12px; }
+.drops-auth-steps li + li { margin-top: 18px; }
+.drops-auth-steps p { margin: 6px 0 8px; font-size: 13px; line-height: 1.8; }

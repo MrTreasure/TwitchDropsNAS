@@ -2,12 +2,13 @@ name: twitch-drops-nas
 services:
   drops:
     build: .
-    image: twitch-drops-nas:1.1.0
+    image: twitch-drops-nas:2.0.0
     restart: unless-stopped
     ports: ["127.0.0.1:8080:8080"]
     environment:
       TDM_PROXY_URL: ${TDM_PROXY_URL:-}
       TDM_PUBLIC_ORIGIN: ${TDM_PUBLIC_ORIGIN:-}
+      TDM_WEB_UI: ${TDM_WEB_UI:-true}
     volumes: ["drops-data:/data"]
     tmpfs: ["/tmp:size=8m,mode=1777", "/run/twitch-drops:uid=1000,gid=1000,mode=0700"]
     read_only: true

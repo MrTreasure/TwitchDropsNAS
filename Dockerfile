@@ -8,17 +8,23 @@ COPY ui/ ./
 RUN chmod 0755 /opt/pnpm/bin/pnpm.mjs && ln -s /opt/pnpm/bin/pnpm.mjs /usr/local/bin/pnpm
 RUN node /opt/pnpm/bin/pnpm.mjs run build
 
-FROM python:3.11-slim@sha256:0a236bf8f0b6013383df04d1cd02cb0abe5fbfa1a7012141d7ff9202b7cb30a6
-WORKDIR /app
-COPY --chmod=0444 requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt && mkdir -p /data /run/twitch-drops && chown 1000:1000 /data /run/twitch-drops
-COPY --chown=1000:1000 --chmod=0444 service.py twitch.py reward_images.py goals.py transport.py storage.py network_proxy.py webui.py ./
-COPY --from=ui-build --chown=1000:1000 /build/dist ./ui
-ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 TDM_DATA_DIR=/data TDM_SOCKET=/run/twitch-drops/service.sock TDM_HTTP_PORT=8080
-COPY --chown=1000:1000 --chmod=0444 docs/openapi.json ./docs/openapi.json
-COPY --chown=1000:1000 --chmod=0444 catalogue/announcements.json ./catalogue/announcements.json
-RUN chmod -R a+rX /app/ui && chmod 0755 /app/docs /app/catalogue
+FROM golang:1.26.5@sha256:705e964a93a2fd2e75c7d59bb7d781b57e30f12293ffde5175c69229e18fb678 AS backend-build
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY *.go ./
+COPY catalogue/announcements.json ./catalogue/announcements.json
+COPY docs/openapi.json ./docs/openapi.json
+COPY --from=ui-build /build/dist ./ui/dist
+RUN CGO_ENABLED=0 go build -buildvcs=false -trimpath -ldflags="-s -w" -o /twitch-drops .
+
+FROM alpine:3.22@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+RUN mkdir -p /data /run/twitch-drops && chown 1000:1000 /data /run/twitch-drops
+COPY --from=backend-build --chmod=0555 /twitch-drops /app/twitch-drops
+ENV TDM_DATA_DIR=/data TDM_SOCKET=/run/twitch-drops/service.sock TDM_HTTP_HOST=0.0.0.0 TDM_HTTP_PORT=8080
+COPY --chmod=0444 LICENSE NOTICE.md THIRD_PARTY_NOTICES.md /app/
 USER 1000:1000
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD python -c "import urllib.request; assert urllib.request.urlopen('http://127.0.0.1:8080/health',timeout=3).status==200"
-CMD ["python", "service.py"]
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD ["/app/twitch-drops", "health"]
+ENTRYPOINT ["/app/twitch-drops"]
+CMD ["serve"]

@@ -2,7 +2,9 @@
 
 简体中文 · [English](README.en.md)
 
-NAS 上运行的 Twitch Drops 管理服务：低流量观看、多游戏队列、奖励目标、独立 Web UI，以及 Agent / 控制台接入 API。MIT 开源。
+可自行部署的 Twitch Drops 管理服务：低流量观看、多游戏队列、奖励目标、独立 Web UI，以及 Agent / 控制台接入 API。MIT 开源。
+
+部署位置由使用者选择：自己的 NAS／服务器，或具备运行条件的 WorkBuddy 执行环境。每个实例独立保存使用者的账号和数据，不依赖项目作者的 NAS、后台或代理。WorkBuddy 环境需要先检查，当前未完成 WorkBuddy 实测；参见 [WorkBuddy 部署条件](docs/workbuddy.md) 和 [通用 Agent 提示词](docs/agent-prompt.md)。
 
 **当前状态（实验性）：** 已验证 Docker、UI 与管理 API，但现有设备授权未返回活动目录和个人掉宝进度；网页查询还可能要求完整性验证。授权成功不等于掉宝能力可用。活动说明与账号进度独立展示，不会把 `null` 当成无活动或零进度；个人进度不可读时，不能可靠执行自动达标停止。实际掉宝增长尚未经符合条件的直播验证。
 
@@ -18,7 +20,7 @@ NAS 上运行的 Twitch Drops 管理服务：低流量观看、多游戏队列�
 
 ## 功能
 
-- Twitch 官方设备授权：在 Twitch 激活页登录，NAS 不接收邮箱密码。
+- Twitch 官方设备授权：在 Twitch 激活页登录，后端不接收邮箱密码。
 - 一个账号、最多 12 个游戏任务；优先级调度、指定频道、自动发现开播。
 - 选择本轮全部奖励，或指定同一游戏不同活动中的奖励。
 - 全部模式锁定本轮目标，未来活动不会自动加入；未知资料不当作 0 或完成。
@@ -37,7 +39,7 @@ docker compose up -d --build
 docker compose exec drops cat /data/admin-token
 ```
 
-打开 <http://127.0.0.1:8080>，用管理令牌登录，再连接 Twitch、完成官方授权、同步资料、设置游戏和奖励目标并开始挂机。远程 NAS 可先使用 SSH 端口转发：
+默认启用独立 Web UI；设置 `TDM_WEB_UI=false` 可关闭页面并保留 API／后台任务。打开 <http://127.0.0.1:8080>，用管理令牌登录，再连接 Twitch、完成官方授权、同步资料、设置游戏和奖励目标并开始挂机。远程 NAS 可先使用 SSH 端口转发：
 
 ```sh
 ssh -L 8080:127.0.0.1:8080 user@your-nas
@@ -77,10 +79,11 @@ Compose 默认只绑定主机回环地址。使用 HTTPS 反向代理时，设�
 
 | 环境变量 | 默认值／用途 |
 |---|---|
-| `TDM_DATA_DIR` | `/data`，状态与独立部署凭据目录 |
-| `TDM_SOCKET` | `/run/twitch-drops/service.sock`，权限 0600 |
+| `TDM_DATA_DIR` | 原生 `./data`，Docker `/data`，私有状态与凭据目录 |
+| `TDM_SOCKET` | 原生默认关闭；Docker `/run/twitch-drops/service.sock`，Unix 权限 0600 |
+| `TDM_WEB_UI` | `true`；关闭独立页面，保留 API 与后台任务 |
 | `TDM_HTTP_PORT` | `8080`；设为 `0` 禁用 TCP / 独立 UI |
-| `TDM_HTTP_HOST` | `0.0.0.0`，配合 Compose 的主机回环绑定 |
+| `TDM_HTTP_HOST` | 原生 `127.0.0.1`；Docker `0.0.0.0`，配合 Compose 主机回环绑定 |
 | `TDM_ADMIN_TOKEN` | 可选，至少 24 字符；未配置时生成 `/data/admin-token` |
 | `TDM_PUBLIC_ORIGIN` | 可选，反向代理的完整公网来源 |
 | `TDM_PROXY_URL` | 可选，外部 HTTP/HTTPS 代理；不与内置 mihomo 同用 |
@@ -92,6 +95,10 @@ Compose 默认只绑定主机回环地址。使用 HTTPS 反向代理时，设�
 | `TDM_ANNOUNCEMENTS_FILE` | 可选，管理员维护的公开活动说明 JSON；默认使用内置的已核对公告，仅展示说明，不作为个人进度或奖励 ID |
 | `TDM_PASSWORD_BOOK` | 可选 YAML 凭据宿主适配器，只修改 `twitch_drops.account`；未配置则用 `/data/credentials.json` |
 
+## 授权与进度不可读
+
+未连接或登录失效时，界面提供官方设备授权；已连接但进度不可读时，明确显示两者的区别，并提供官方库存、游戏关联入口和处理步骤。目前没有核实到供普通观众额外开启进度读取的 OAuth 授权项，重复授权不保证恢复读取。详见 [授权说明](docs/authorization.md)。
+
 ## 调度与 Agent
 
 独立部署默认在 10～20 分钟范围内重新随机选择资料检查间隔，可通过 `/api/automation` 查询启停和真实执行状态。开启／暂停挂机与启停资料同步是两个独立开关。
@@ -100,19 +107,44 @@ Compose 默认只绑定主机回环地址。使用 HTTPS 反向代理时，设�
 
 [API 文档](docs/api.md) · [OpenAPI](docs/openapi.json) · [Agent 接入提示词](docs/agent-prompt.md)
 
-## 本地开发
+## Release 与启动选择
+
+GitHub Release 提供 Linux amd64／arm64、Windows amd64／arm64、macOS Intel／Apple Silicon 六个平台的压缩包和 SHA256SUMS。下载自己平台的包，先校验 SHA-256，再解压运行；无需 Python、Go、Node.js 或 Docker。候选版用于验收，平台实际运行验证情况以 Release 说明为准。
+
+交互式终端直接启动时会询问是否启用独立 Web UI。无人值守运行请明确选择：
 
 ```sh
-python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-pnpm --dir ui install --frozen-lockfile
-pnpm --dir ui run build
-TDM_DATA_DIR=./data TDM_UI_DIR=./ui/dist TDM_SOCKET=./data/service.sock .venv/bin/python service.py
+./twitch-drops --web-ui=true   # 独立 UI + API
+./twitch-drops --web-ui=false  # 只运行 API 和后台任务
 ```
 
-常规验证：`python3 -m py_compile *.py`、`pnpm --dir ui run typecheck`、`pnpm --dir ui run build`、容器健康和有界 API 检查。UI 交互由人工验收，不默认运行浏览器自动化。
+Windows 对应 `twitch-drops.exe`。也可设置 `TDM_WEB_UI=true/false`。关闭 Web UI 后 `/` 和 `/assets/*` 返回 404，管理 API 继续鉴权，不影响观看、调度和已有控制台；需要完全关闭 TCP 时另设 `TDM_HTTP_PORT=0` 并提供受信 Unix socket。嵌入已有管理台的实例使用 `TDM_WEB_UI=false`，复用管理台中的界面。
 
-完整 Dockerfile 在容器内构建 UI；已有本地 UI 构建时可用 `docker build -f Dockerfile.runtime -t twitch-drops-nas:1.1.0 .`。Python / UI 依赖固定，Node 构建阶段采用固定版本。
+## Go 二进制与本地开发
+
+后端使用 Go，运行时不需要 Python、Node.js 或独立 SQLite 服务。UI、公开活动说明与 OpenAPI 嵌入可执行文件；Node.js／pnpm 只在构建 UI 时需要。
+
+源码构建需要 Go 1.26.5、Node.js 26 和 pnpm 12.3.4：
+
+```sh
+sh scripts/build.sh
+# 默认只监听 127.0.0.1:8080，数据保存在当前目录的 data/
+./dist/twitch-drops
+# 首次启动后，在自己的另一终端查看管理令牌，不要贴到聊天中
+cat data/admin-token
+```
+
+可通过 `TDM_DATA_DIR` 指定自己的私有持久目录。原生模式默认不创建 Unix socket；只有接入本机网关或原生调度器时才设置 `TDM_SOCKET`。Windows 使用针对 Windows 构建的 `.exe`，不配置 Unix socket；当前已完成跨平台编译，Windows/macOS 的真实运行尚待验证。内置 mihomo 的匿名内存配置仅适用于 Linux，其他系统使用直连或明确配置的 HTTP/HTTPS 代理。
+
+常规验证：`go vet ./...`、`go build ./...`、`pnpm --dir ui run typecheck`、`pnpm --dir ui run build`，以及有界的健康与 API 检查。UI 交互由人工验收，不默认运行浏览器自动化。
+
+完整 Dockerfile 在多阶段构建中编译 UI 和 Go；已经执行 `sh scripts/build.sh` 时，可用 `docker build -f Dockerfile.runtime -t twitch-drops-nas:2.0.0 .` 构建精简运行镜像。Go 模块和 UI 依赖均锁定版本。运行镜像不包含 Go 编译器、Node.js 或 Python。
+
+## 从 Python 1.x 升级
+
+Go 2.x 继续读取原来的 `state.sqlite`、`credentials.json` 或显式配置的 YAML 凭据适配器，以及 `admin-token`，不要求重新授权。管理 Cookie 签名和 API 保持兼容，游戏目标、未知进度、图片记录及周期任务开关均保留。
+
+升级前停止旧实例并备份私有数据目录／卷，再构建并启动 Go 镜像；同一数据目录只允许一个实例。不要删除卷，不要将真实数据放入仓库。原生定时任务改为执行 `twitch-drops sync`，保留原来的唯一计划并核对任务登记；健康检查改为 `twitch-drops health`。原有 Python 健康命令和 `deploy/sync.py` 不能在 Go 运行镜像中使用。回滚前停止 Go 实例，再使用保留的旧镜像和备份。Go 版验收前保留 Python 1.x 源码和旧镜像；验收后再清理，不提前删除回滚材料。
 
 ## 说明与许可证
 

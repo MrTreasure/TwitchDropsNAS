@@ -21,3 +21,5 @@ storage-state*.json
 .cache/
 
 .finesse/
+
+/dist/
