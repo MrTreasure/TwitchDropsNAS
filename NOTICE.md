@@ -16,8 +16,8 @@ automatic claim implementation or integrity-challenge workaround.
 
 The optional War Thunder UI style links directly to original logo and GUI icons
 hosted by War Thunder / Gaijin. Game trademarks and artwork belong to their
-respective owners and are not covered by this project's MIT license. No game
-images are redistributed in the source tree or release archives. This project
+respective owners and are not covered by this project's MIT license. Original game artwork is not redistributed as standalone assets; documentation
+screenshots may include the artwork as rendered by the interface. This project
 is an unofficial, independent tool and is not endorsed by Twitch or Gaijin.
 
 Official asset sources: https://warthunder.com/assets/img/svg/logo-wt.svg,

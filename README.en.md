@@ -6,17 +6,32 @@ A self-hosted Twitch Drops manager with Docker, a reusable Web UI, per-game rewa
 
 Choose your own deployment target: your NAS/server or a compatible WorkBuddy execution environment. Each instance owns its user's accounts and data; it does not depend on the author's NAS, admin service, or proxy. WorkBuddy requires environment checks and has not been tested with this project. See [WorkBuddy deployment requirements](docs/workbuddy.md#english-summary) and the [agent prompt](docs/agent-prompt.md).
 
-> **Experimental status:** On 2026-10-25, a Linux amd64 deployment on a real War Thunder stream returned a valid reward ID, official watched minutes and reward goals. Viewing uses HLS playlist metadata and segment HEAD requests without media body downloads. Other games, authorization profiles and environments still require separate verification; full-round automatic stopping remains unverified. Campaign discovery can still return null. Unknown data is never treated as zero or completion, and integrity challenges are not bypassed.
+> **Experimental status:** On 2026-10-25, a Linux amd64 deployment on a real War Thunder stream returned a valid reward ID, official watched minutes and reward goals. A user-provided Twitch inventory screenshot dated 2026-10-26 also confirms two manually claimed booster rewards; see the final verification section. Viewing uses HLS playlist metadata and segment HEAD requests without media body downloads. Other games, authorization profiles and environments still require separate verification; full-round automatic stopping remains unverified. Campaign discovery can still return null. Unknown data is never treated as zero or completion, and integrity challenges are not bypassed.
 
 ## Screenshots
 
-Captured from an isolated demo instance with no real Twitch account connected. They contain no personal nickname, NAS address, device code, or secret. Public reward descriptions are not evidence of earned rewards or watched minutes.
+These desktop screenshots show the same UI in two themes, using anonymized demo data in an isolated local page. They illustrate the interface; real Drops and claim evidence appears in the final section.
 
-![Standalone dashboard with public reward descriptions and separate progress state](docs/images/dashboard.png)
+### War Thunder theme
 
-![Connection settings and randomized idle-check range](docs/images/check-settings.png)
+Dark hangar panels, official War Thunder icons and reward cards.
 
-![Activity-scoped image import preview and persistent metadata](docs/images/reward-image-import.png)
+![War Thunder theme: task queue, reward goals and progress panels using isolated demo data](docs/images/dashboard-war-thunder.png)
+
+### Default style
+
+The same tasks, progress and account controls, with the theme switch at the top right.
+
+![Default style: the same functionality using isolated demo data](docs/images/dashboard-default.png)
+
+<details>
+<summary>Connection settings and reward image import</summary>
+
+![Connection settings and randomized idle-check range, isolated demo](docs/images/check-settings.png)
+
+![Activity-scoped image import preview, isolated demo](docs/images/reward-image-import.png)
+
+</details>
 
 ## Features
 
@@ -166,7 +181,7 @@ Only original CDN URLs and provenance timestamps are persisted in SQLite. No sou
 
 ## Privacy and license
 
-The repository contains this independent service, its reusable UI, and public documentation. It excludes deployment credentials, real account data, proxy nodes, NAS paths, databases, logs, and other backend source. Twitch public Client IDs and GraphQL query hashes are interoperability identifiers, not a user's AK or secret.
+The repository contains this independent service, its reusable UI, and public documentation. It excludes deployment credentials, private account identifiers, proxy nodes, NAS paths, databases, logs, and other backend source. The user-authorized inventory screenshot below only shows the campaign, rewards, progress and claim states. Twitch public Client IDs and GraphQL query hashes are interoperability identifiers, not a user's AK or secret.
 
 This project is not affiliated with Twitch, Gaijin, or any game publisher. Reward eligibility, authorization capabilities, progress and fulfillment remain controlled by those platforms. See [NOTICE.md](NOTICE.md) for upstream attribution and [LICENSE](LICENSE) for the MIT license.
 
@@ -175,3 +190,16 @@ This project is not affiliated with Twitch, Gaijin, or any game publisher. Rewar
 The default auto mode uses verified advertised stream sessions and begins queries five minutes before the stream, including a check at its advertised start. Campaign eligibility dates are not used as stream times. Outside known windows, automatic channel discovery and metadata checks skip Twitch requests. Native wakeups remain local policy checks; manual sync is still available.
 
 Each task can use Auto / Custom / Always. Custom entries accept explicit timezones through the API and Beijing time through the UI. Games without known sessions retain randomized low-frequency discovery. A one-hour late-start grace applies only while waiting to find a stream; a selected real stream continues until it actually ends or goals complete. Add a session or use Always for unannounced/very late broadcasts. The built-in 18 WTCS sessions cite Gaijin's announcement; operators may supply `TDM_STREAM_SCHEDULES_FILE`. See the API guide for states and provenance.
+
+## Real-world verification
+
+The following screenshot was supplied by a user on **2026-10-26** from Twitch's official Drops inventory, showing real progress and manual claims during use of this project:
+
+- **Claimed:** 50% SL Booster and 50% RP Booster.
+- **Still progressing:** 1 Day of Premium at 62%, Vampir camouflage at 25%, and the Bf 109 E-3 vehicle at 12%.
+
+![Real Twitch inventory: two claimed boosters and ongoing progress for the remaining rewards](docs/images/twitch-drops-verification.png)
+
+This is a real Twitch page, not an AI illustration or demo-data screen. Reward artwork, progress percentages and claim states are unchanged. It was checked for account names, email addresses, access tokens and private deployment addresses; none appear in the image.
+
+This record verifies official watch-time accumulation and two manual claims for this War Thunder campaign. Other games, accounts and deployment environments require separate verification. Automatic stopping after an entire round remains untested in a live completion run.
