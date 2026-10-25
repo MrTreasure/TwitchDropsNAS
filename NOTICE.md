@@ -10,6 +10,19 @@ and watch-event interoperability were checked against:
 This is an independent service. It has no browser, playback code,
 automatic claim implementation or integrity-challenge workaround.
 
+## War Thunder artwork
+
+The optional War Thunder UI style links directly to original logo and GUI icons
+hosted by War Thunder / Gaijin. Game trademarks and artwork belong to their
+respective owners and are not covered by this project's MIT license. No game
+images are redistributed in the source tree or release archives. This project
+is an unofficial, independent tool and is not endorsed by Twitch or Gaijin.
+
+Official asset sources: https://warthunder.com/assets/img/svg/logo-wt.svg,
+https://warthunder.com/i/favicons/favicon.ico,
+https://static.encyclopedia.warthunder.com/gui_skin/item_type_rp.svg,
+https://static.encyclopedia.warthunder.com/gui_skin/item_type_talisman.svg.
+
 ## MIT License (upstream reference)
 
 Copyright (c) 2024 DevilXD

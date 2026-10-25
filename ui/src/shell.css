@@ -12,3 +12,7 @@ header p { color: #66756f; margin: 5px 0 0; font-size: 12px; }
 .wt-admin-help { font-size: 12px; line-height: 1.8; color: #66756f; }
 .login-card { max-width: 520px; margin: 60px auto; padding: 32px; border: 1px solid #dce1da; border-radius: 12px; background: white; }
 .login-card p { font-size: 13px; line-height: 1.8; color: #66756f; }
+/* The standalone shell follows its page selection; embedded hosts keep their own theme. */
+body:has(.standalone-shell .drops-page[data-drops-style="war-thunder"]) { background: #171c22; color: #cfd1cf; color-scheme: dark; }
+.standalone-shell:has(.drops-page[data-drops-style="war-thunder"]) > header p { color: #a1a7aa; }
+.standalone-shell:has(.drops-page[data-drops-style="war-thunder"]) > header .ant-btn { color: #cfd1cf; border-color: rgba(187,199,207,.14); background: #22282f; }

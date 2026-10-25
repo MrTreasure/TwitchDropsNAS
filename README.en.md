@@ -20,6 +20,7 @@ Captured from an isolated demo instance with no real Twitch account connected. T
 
 ## Features
 
+- A page-specific Default / War Thunder style switch with the official logo, research and talisman icons, muted red reward cards, and game-inspired panels. The choice stays in this browser and does not change the host console theme. Official assets load directly from their original HTTPS URLs.
 - Official Twitch device authorization. Approve the code on Twitch; the backend does not request your email or Twitch password.
 - One account and up to 12 prioritized game tasks, with configured channels and optional channel discovery.
 - Select all rewards in the current round or specific rewards from officially returned campaign data.

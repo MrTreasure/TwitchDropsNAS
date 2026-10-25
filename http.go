@@ -126,7 +126,7 @@ func (w *Web) handler(trusted bool) http.Handler {
 		out.Header().Set("Cache-Control", "no-store")
 		out.Header().Set("X-Content-Type-Options", "nosniff")
 		out.Header().Set("Referrer-Policy", "no-referrer")
-		out.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://static-cdn.jtvnw.net https://images.twitch.tv https://static.twitchcdn.net https://staticfiles.warthunder.com https://patchnotes.cdn.gaijin.net; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		out.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https://static-cdn.jtvnw.net https://images.twitch.tv https://static.twitchcdn.net https://staticfiles.warthunder.com https://patchnotes.cdn.gaijin.net https://warthunder.com https://static.encyclopedia.warthunder.com; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 		p := r.URL.Path
 		actor := "standalone-admin"
 		if trusted {

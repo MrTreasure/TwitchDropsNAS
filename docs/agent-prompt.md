@@ -37,6 +37,7 @@
 
 - 只运行同一个 Docker 后端，设置 `TDM_WEB_UI=false`、`TDM_HTTP_PORT=0`；由现有已鉴权网关代理 owner-only Unix socket，校验现有管理员、Origin 和请求方法。
 - 复用 `ui/src/TwitchDrops.tsx` 和 CSS，使用 `node scripts/export-ui.mjs <目标目录>` 导出，传入控制台 API 前缀和可选任务导航。不要重写另一套奖励判定逻辑。
+- 保留组件内独立的“默认／战雷”页面风格开关；导出同时包含 `war-thunder-style.ts`。选择只写浏览器 `twitch-drops-ui:style:v1`，不修改宿主全局主题、后端配置或任务。若宿主有 CSP，图片来源需允许 `https://warthunder.com` 与 `https://static.encyclopedia.warthunder.com`；不转存官方素材。
 - 如果已有原生同步计划，设 `TDM_EXTERNAL_SCHEDULER=true`；由唯一 cron/systemd 执行器调用 socket `/internal/scan`。登记到宿主统一任务控制台并实际核对启停；没有登记桥接器则报告该限制，不虚称已接入。
 
 ## Twitch 授权和目标
