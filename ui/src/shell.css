@@ -1,0 +1,14 @@
+:root { font-family: system-ui, sans-serif; color: #27372e; background: #f4f5f1; font-synthesis: none; --lab-text-4c6f60: #4c6f60; --lab-text-66756f: #66756f; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+a { color: #486e58; text-underline-offset: 3px; }
+.standalone-shell { max-width: 1600px; padding: 28px; margin: auto; }
+.standalone-shell > header { display: flex; gap: 24px; align-items: center; justify-content: space-between; margin-bottom: 24px; }
+h1 { font-size: 25px; margin: 0; }
+header p { color: #66756f; margin: 8px 0 0; }
+.wt-admin-panel { min-width: 0; padding: 20px; border: 1px solid #dce1da; border-radius: 12px; background: #fff; }
+.wt-admin-panel-title { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.wt-admin-panel h2 { margin: 0; font-size: 16px; }
+.wt-admin-help { font-size: 12px; line-height: 1.8; color: #66756f; }
+.login-card { max-width: 520px; margin: 60px auto; padding: 32px; border: 1px solid #dce1da; border-radius: 12px; background: white; }
+.login-card p { font-size: 13px; line-height: 1.8; color: #66756f; }

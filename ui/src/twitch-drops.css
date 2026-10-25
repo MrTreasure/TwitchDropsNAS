@@ -1,0 +1,56 @@
+.drops-page { display: grid; gap: 16px; min-width: 0; }
+.drops-toolbar, .drops-actions, .drops-link, .drops-game, .drops-device-code { display: flex; align-items: center; gap: 8px; }
+.drops-toolbar { justify-content: space-between; gap: 18px; flex-wrap: wrap; }
+.drops-actions { flex-wrap: wrap; flex: none; }
+.drops-status { flex: 1; min-width: 220px; font-size: 13px; line-height: 1.7; }
+.drops-summary { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.drops-metric { display: grid; align-content: start; gap: 8px; min-width: 0; }
+.drops-metric > span { display: flex; align-items: center; gap: 7px; font-size: 12px; opacity: .7; }
+.drops-metric strong { font-size: 21px; font-weight: 650; overflow-wrap: anywhere; }
+.drops-metric small { font-size: 12px; line-height: 1.65; opacity: .75; }
+.drops-page .wt-admin-panel-title { flex-wrap: wrap; gap: 12px; }
+.drops-page .wt-admin-panel-title h2 { display: flex; align-items: center; gap: 8px; }
+.drops-page .wt-admin-help { margin: 6px 0 0; }
+.drops-account .ant-alert { margin-top: 12px; }
+.drops-device { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 20px; padding: 20px; margin-top: 16px; border-radius: 10px; border: 1px solid color-mix(in srgb, currentColor 18%, transparent); background: color-mix(in srgb, var(--lab-text-4c6f60, #4c6f60) 6%, transparent); }
+.drops-device > div > span { font-size: 13px; }
+.drops-device-code { margin: 10px 0; gap: 16px; }
+.drops-device code { font-size: 30px; letter-spacing: .12em; user-select: text; font-variant-numeric: tabular-nums; }
+.drops-device small { font-size: 12px; opacity: .75; }
+.drops-advanced { margin-top: 16px; font-size: 12px; }
+.drops-advanced summary { cursor: pointer; color: var(--lab-text-66756f, #66756f); }
+.drops-advanced label { display: block; margin: 16px 0 8px; }
+.drops-advanced > div { display: flex; gap: 12px; align-items: center; }
+.drops-advanced .ant-input { max-width: 360px; }
+.drops-advanced p { opacity: .7; margin-bottom: 0; }
+.drops-game { flex-wrap: wrap; }
+.drops-game small { opacity: .6; }
+.drops-progress > .ant-alert { margin: 12px 0; }
+.drops-campaigns { display: grid; gap: 14px; margin-top: 16px; }
+.drops-campaigns > details { border: 1px solid color-mix(in srgb, currentColor 12%, transparent); border-radius: 9px; padding: 12px 16px; }
+.drops-campaigns summary { cursor: pointer; line-height: 1.8; }
+.drops-campaigns summary > span { font-weight: 600; margin-right: 12px; }
+.drops-campaigns summary > small { opacity: .65; font-size: 12px; }
+.drops-rewards { margin-top: 12px; max-height: 500px; overflow-y: auto; }
+.drops-reward { display: grid; grid-template-columns: minmax(160px, 1fr) minmax(160px, .75fr) 110px; align-items: center; gap: 20px; padding: 13px 0; border-top: 1px solid color-mix(in srgb, currentColor 8%, transparent); }
+.drops-reward strong { font-size: 13px; font-weight: 550; }
+.drops-reward small { display: block; font-size: 12px; opacity: .65; margin-top: 5px; }
+.drops-reward > .ant-tag { justify-self: end; }
+.drops-bottom { display: grid; grid-template-columns: minmax(270px, .85fr) minmax(350px, 1.15fr); gap: 16px; }
+.drops-facts { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 10px 16px; font-size: 12px; line-height: 1.6; }
+.drops-facts dt { opacity: .65; }
+.drops-facts dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.drops-log { max-height: 290px; overflow: auto; }
+.drops-log > div { display: grid; grid-template-columns: 148px minmax(0, 1fr); gap: 12px; padding: 9px 0; font-size: 12px; line-height: 1.6; border-bottom: 1px solid color-mix(in srgb, currentColor 7%, transparent); }
+.drops-log time { opacity: .6; font-variant-numeric: tabular-nums; }
+.drops-log [data-level="warning"] { color: var(--lab-warning, #b47827); }
+.drops-log [data-level="error"] { color: var(--lab-danger, #bc4848); }
+.drops-form-save, .drops-editor-actions { margin-top: 24px; }
+.drops-editor-actions { display: flex; justify-content: space-between; gap: 12px; }
+.drops-page :focus-visible { outline-offset: 3px; }
+
+.drops-goal-summary { display: grid; gap: 5px; font-size: 12px; line-height: 1.6; }
+.drops-goal-summary strong { font-size: 13px; }
+.drops-goal-summary small { opacity: .7; }
+.drops-goal-help { font-size: 13px; line-height: 1.7; margin-bottom: 16px; }
+.drops-reward strong + .ant-tag { margin-inline-start: 8px; }

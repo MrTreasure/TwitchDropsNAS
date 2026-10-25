@@ -1,0 +1,167 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Button, Checkbox, Drawer, Empty, Form, Input, InputNumber, Modal, Progress, Select, Spin, Table, Tag } from 'antd';
+import { Check, Copy, ExternalLink, Gamepad2, Network, Pause, Play, Plus, Radio as Twitch, RefreshCw, Settings2, Unplug } from 'lucide-react';
+import './twitch-drops.css';
+import type { MouseEventHandler } from 'react';
+
+export type TwitchDropsProps = { apiBase?: string; taskRegistryHref?: string; onNavigateTasks?: MouseEventHandler<HTMLAnchorElement> };
+
+type Settings = { networkMode: 'auto' | 'direct' | 'proxy' };
+type GoalRef = { campaignId: string; dropId: string };
+type Goal = { mode: 'all' | 'selected'; rewards: GoalRef[]; lockedAt: string | null };
+type GoalState = { taskId: string; status: string; total: number; completed: number; claimPending: number; blocked: number; rewards: (GoalRef & { name: string; campaignName: string; status: string; completed: boolean })[] };
+type Task = { id: string; game: { id: string | null; name: string; slug: string }; enabled: boolean; priority: number; watchOnly: boolean; autoChannels: boolean; channels: string[]; goal: Goal };
+type Drop = { id: string; name: string; benefits: string[]; minutes: number | null; requiredMinutes: number | null; claimed: boolean | null; claimable: boolean; sampledAt: string };
+type Campaign = { id: string; name: string; gameId: string; gameName: string; startsAt: string | null; endsAt: string | null; sampledAt: string; linked: boolean | null; drops: Drop[] };
+type Snapshot = {
+ account: { login: string; user_id: string; validatedAt: string; expiresAt: number } | null;
+ authorization: { pending: boolean; device: { userCode: string; verificationUri: string; expiresAt: string } | null; error: string | null };
+ settings: Settings; running: boolean; state: string; reason: string;
+ current: { taskId: string; game: Task['game']; eligibility: string; channel: { login: string; displayName: string }; selectedAt: string } | null;
+ goals: GoalState[]; queueCompletedAt: string | null;
+ tasks: Task[]; campaigns: Campaign[]; progress: { status: string; sampledAt: string | null; message: string; failedAt?: string; catalogueAvailable?: boolean };
+ currentProgress: { dropId: string; minutes: number | null; sampledAt: string } | null;
+ syncing: boolean; lastSync: string | null; lastWatchAt: string | null; watchReports: number; sampledAt: string;
+ network: { route: string; proxy: string; lastSuccessAt: string | null; lastError: string | null; cooldownUntil: string | null };
+ traffic: { hourBytes: number; dayBytes: number; proxyDayBytes: number; directDayBytes: number };
+ events: { id: number; at: string; level: string; message: string }[];
+};
+type TaskForm = { gameName: string; priority: number; enabled: boolean; watchOnly: boolean; autoChannels: boolean; channelsText: string; goalMode: 'all' | 'selected'; rewardKeys: string[]; resetGoals: boolean };
+const stateLabels: Record<string, string> = { paused: '已暂停', watching: '观看上报中', waiting: '等待任务', error: '需要处理', login_required: '等待登录', cooldown: '冷却中', completed: '本轮已完成' };
+const goalLabels: Record<string, string> = { waiting_targets: '等待官方目标资料', ready: '等待直播／执行中', unknown: '官方进度无法确认', waiting_claim: '等待手动领取前置奖励', completed: '本轮目标已达标', expired: '活动结束，目标未完成' };
+const rewardKey = (ref: GoalRef) => JSON.stringify([ref.campaignId, ref.dropId]);
+const date = (value?: string | null) => value ? new Date(value).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) : '尚无记录';
+const bytes = (value: number) => value < 1024 ? `${value} B` : value < 1048576 ? `${(value / 1024).toFixed(1)} KiB` : `${(value / 1048576).toFixed(2)} MiB`;
+const percent = (value: number, limit: number) => Math.min(100, Math.max(0, value * 100 / Math.max(1, limit)));
+
+async function api(path: string, method = 'GET', body?: unknown, signal?: AbortSignal, base = '/api'): Promise<Snapshot> {
+ const response = await fetch(base + path, { method, credentials: 'same-origin', signal: signal ?? AbortSignal.timeout(30000),
+  ...(body === undefined ? {} : { headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }) });
+ const data = await response.json();
+ if (!response.ok) throw new Error(data.error || data.message || '掉宝服务暂不可用');
+ return data;
+}
+
+export default function TwitchDrops({ apiBase = '/api', taskRegistryHref, onNavigateTasks }: TwitchDropsProps = {}) {
+ const [data, setData] = useState<Snapshot | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState('');
+ const [settingsOpen, setSettingsOpen] = useState(false), [editor, setEditor] = useState<Task | 'new' | null>(null), [disconnectOpen, setDisconnectOpen] = useState(false);
+ const [clientId, setClientId] = useState(''), [copied, setCopied] = useState(false), [clock, setClock] = useState(Date.now());
+ const [settingsForm] = Form.useForm<Settings>(), [taskForm] = Form.useForm<TaskForm>();
+ const goalMode = Form.useWatch('goalMode', taskForm);
+ const editingGame = Form.useWatch('gameName', taskForm);
+ const sequence = useRef(0), current = useRef(data), mounted = useRef(true), mutation = useRef(false);
+ current.current = data;
+ const load = useCallback(async (signal?: AbortSignal) => {
+  if (mutation.current) return;
+  const id = ++sequence.current;
+  const result = await api('/snapshot', 'GET', undefined, signal, apiBase);
+  if (!signal?.aborted && mounted.current && id === sequence.current) { setData(result); setError(''); }
+ }, [apiBase]);
+ useEffect(() => {
+  mounted.current = true;
+  let timer: number | undefined; let controller: AbortController | null = null;
+  const poll = async () => {
+   if (document.hidden) return;
+   controller?.abort(); controller = new AbortController(); const ownController = controller;
+   try { await load(ownController.signal); } catch (e) { if (!ownController.signal.aborted && mounted.current) setError(e instanceof Error ? e.message : '状态读取失败'); }
+   if (controller === ownController && mounted.current && !document.hidden) timer = window.setTimeout(poll, current.current?.authorization.pending ? 3000 : current.current?.running || current.current?.syncing ? 10000 : 30000);
+  };
+  const visible = () => { window.clearTimeout(timer); if (document.hidden) controller?.abort(); else void poll(); };
+  const changed = () => { window.clearTimeout(timer); void poll(); };
+  void poll(); document.addEventListener('visibilitychange', visible); window.addEventListener('orbit-api-change', changed);
+  return () => { mounted.current = false; controller?.abort(); window.clearTimeout(timer); document.removeEventListener('visibilitychange', visible); window.removeEventListener('orbit-api-change', changed); };
+ }, [load]);
+ const pending = data?.authorization.device;
+ useEffect(() => { if (!pending) return; setClock(Date.now()); const timer = window.setInterval(() => setClock(Date.now()), 1000); return () => window.clearInterval(timer); }, [pending?.expiresAt]);
+ async function action(key: string, path: string, method = 'POST', body: unknown = {}) {
+  if (mutation.current) return false;
+  mutation.current = true;
+  setBusy(key); setError(''); const id = ++sequence.current;
+  try { const result = await api(path, method, body, undefined, apiBase); if (mounted.current && id === sequence.current) setData(result); return true; }
+  catch (e) { if (mounted.current) setError(e instanceof Error ? e.message : '操作失败'); return false; }
+  finally { mutation.current = false; if (mounted.current) setBusy(''); }
+ }
+ function openSettings() { if (data) settingsForm.setFieldsValue(data.settings); setSettingsOpen(true); }
+ function edit(task: Task | 'new') {
+  taskForm.setFieldsValue(task === 'new' ? { gameName: '', priority: 50, enabled: true, watchOnly: false, autoChannels: true, channelsText: '', goalMode: 'all', rewardKeys: [], resetGoals: false }
+   : { gameName: task.game.name, priority: task.priority, enabled: task.enabled, watchOnly: task.watchOnly, autoChannels: task.autoChannels, channelsText: task.channels.join('\n'), goalMode: task.goal.mode, rewardKeys: task.goal.rewards.map(rewardKey), resetGoals: false });
+  setEditor(task);
+ }
+ async function copyCode() {
+  if (!pending) return;
+  try { await navigator.clipboard.writeText(pending.userCode); setCopied(true); window.setTimeout(() => setCopied(false), 2000); }
+  catch { setError('复制失败，可直接选中授权码复制'); }
+ }
+ const secondsLeft = pending ? Math.max(0, Math.ceil((Date.parse(pending.expiresAt) - clock) / 1000)) : 0;
+ const editingTask = editor && editor !== 'new' ? editor : null;
+ const editingCampaigns = data?.campaigns.filter(c => c.gameName.toLowerCase() === editingGame?.trim().toLowerCase()) ?? [];
+ const rewardOptions = editingCampaigns.map(c => ({ label: c.name, options: c.drops.map(d => ({ value: rewardKey({ campaignId: c.id, dropId: d.id }), label: d.benefits.join(' / ') || d.name })) }));
+ const availableKeys = new Set(rewardOptions.flatMap(c => c.options.map(o => o.value)));
+ const savedOptions = data?.goals.find(g => g.taskId === editingTask?.id)?.rewards.filter(r => !availableKeys.has(rewardKey(r))).map(r => ({ value: rewardKey(r), label: `${r.campaignName} · ${r.name}` })) ?? [];
+ if (savedOptions.length && editingGame === editingTask?.game.name) rewardOptions.push({ label: '已保存目标（等待资料）', options: savedOptions });
+ const selectedRewards = new Set(data?.tasks.flatMap(t => t.enabled ? t.goal.rewards.map(rewardKey) : []) ?? []);
+ const live = data?.state === 'watching';
+ const known = data?.progress.status === 'available';
+
+ return <div className="drops-page" aria-busy={!!busy}>
+  {error && <Alert type="error" showIcon title={error} closable onClose={() => setError('')} />}
+  <div className="drops-toolbar"><span className="drops-status"><Tag color={live ? 'processing' : data?.state === 'error' ? 'warning' : 'default'}>{stateLabels[data?.state ?? ''] || '读取状态'}</Tag>{data?.reason ?? '正在连接 NAS 掉宝服务'}</span><div className="drops-actions">
+   <Button icon={<Settings2 size={15} />} disabled={!data || !!busy} onClick={openSettings}>连接设置</Button>
+   <Button icon={<RefreshCw size={15} />} loading={busy === 'sync' || data?.syncing} disabled={!data?.account || !!busy || data?.syncing} onClick={() => void action('sync', '/sync')}>同步官方进度</Button>
+   <Button type={data?.running ? 'default' : 'primary'} icon={data?.running ? <Pause size={15} /> : <Play size={15} />} disabled={!data?.account || !!busy} loading={busy === 'control'} onClick={() => void action('control', '/control', 'POST', { running: !data?.running })}>{data?.running ? '暂停挂机' : '开始挂机'}</Button>
+  </div></div>
+  {!data && !error && <Spin />}
+  {data && <>
+   {data.queueCompletedAt && <Alert type="success" showIcon title="本轮所有目标已达标，挂机已自动结束" description={<>完成于 {date(data.queueCompletedAt)}。未领取奖励请到 Twitch 手动领取；下一轮请在游戏任务设置中重新选择目标。</>} />}
+   <div className="drops-summary">
+    <section className="wt-admin-panel drops-metric"><span><Twitch size={16} /> Twitch 账号</span><strong>{data.account?.login ?? '未连接'}</strong><small>{data.account ? '登录校验 ' + date(data.account.validatedAt) : '在官方页面完成设备授权'}</small></section>
+    <section className="wt-admin-panel drops-metric"><span><Gamepad2 size={16} /> 当前任务</span><strong>{data.current?.game.name ?? '等待执行'}</strong><small>{data.current ? <a href={`https://www.twitch.tv/${encodeURIComponent(data.current.channel.login)}`} target="_blank" rel="noreferrer">{data.current.channel.displayName} ↗</a> : '一个账号同时执行一个游戏任务'}</small></section>
+    <section className="wt-admin-panel drops-metric"><span><Network size={16} /> 当前线路</span><strong>{({ direct: '直连', proxy: data.network.proxy, unknown: '等待连接' } as Record<string, string>)[data.network.route] ?? '未知'}</strong><small>{data.network.route === 'proxy' ? '仅使用部署方配置的代理' : data.settings.networkMode === 'auto' ? '直连优先，失败后使用配置的代理' : '按手动线路设置运行'}</small></section>
+    <section className="wt-admin-panel drops-metric"><span>今日代理流量</span><strong>{bytes(data.traffic.proxyDayBytes)}</strong><small>今日全部线路 {bytes(data.traffic.dayBytes)}</small></section>
+   </div>
+
+   <section className="wt-admin-panel drops-account">
+    <div className="wt-admin-panel-title"><div><h2><Twitch size={17} /> Twitch 账号连接</h2><p className="wt-admin-help">授权给 NAS 后，关闭控制台仍可继续挂机。谷歌邮箱注册的账号也在 Twitch 官方页面登录。</p></div><div className="drops-actions">
+     <a className="drops-link" href="https://www.twitch.tv/drops/inventory" target="_blank" rel="noreferrer">手动领取奖励 <ExternalLink size={13} /></a>
+     {data.account && <Button icon={<Unplug size={14} />} disabled={!!busy} onClick={() => setDisconnectOpen(true)}>解除连接</Button>}
+     {!data.authorization.pending && <Button type={data.account ? 'default' : 'primary'} loading={busy === 'auth'} disabled={!!busy} onClick={() => void action('auth', '/auth/start', 'POST', { clientId: clientId.trim() || undefined })}>{data.account ? '重新授权' : '连接 Twitch'}</Button>}
+    </div></div>
+    {data.authorization.error && <Alert type="warning" showIcon title={data.authorization.error} />}
+    {pending && <div className="drops-device"><div><span>在 Twitch 激活页输入授权码</span><div className="drops-device-code"><code>{pending.userCode}</code><Button aria-label="复制 Twitch 授权码" size="small" icon={copied ? <Check size={14} /> : <Copy size={14} />} onClick={() => void copyCode()}>{copied ? '已复制' : '复制'}</Button></div><small>有效期剩余 {Math.floor(secondsLeft / 60)}:{String(secondsLeft % 60).padStart(2, '0')} · 等待官方授权结果</small></div><div className="drops-actions"><Button type="primary" href={pending.verificationUri} target="_blank" rel="noreferrer" icon={<ExternalLink size={14} />}>打开 Twitch 授权页</Button><Button disabled={!!busy} onClick={() => void action('cancel', '/auth/cancel')}>取消授权</Button></div></div>}
+    {data.authorization.pending && !pending && <Alert type="info" title="另一位管理员正在完成 Twitch 授权。" />}
+    {!data.authorization.pending && <details className="drops-advanced"><summary>高级授权设置</summary><label htmlFor="drops-client-id">自有 Twitch 公共应用 Client ID（可选）</label><div><Input id="drops-client-id" value={clientId} maxLength={64} onChange={event => setClientId(event.target.value)} placeholder="留空使用已验证的设备授权方式" /><a href="https://dev.twitch.tv/console/apps" target="_blank" rel="noreferrer">应用管理 ↗</a></div><p>无需填写邮箱密码或 Client Secret。授权码与登录令牌不保存在浏览器存储中。</p></details>}
+   </section>
+
+   <section className="wt-admin-panel">
+    <div className="wt-admin-panel-title"><div><h2>游戏任务</h2><p className="wt-admin-help">每 5 分钟发现开播，按优先级自动执行。完成本轮目标后切换游戏；所有启用游戏达标后结束挂机。</p></div><Button icon={<Plus size={15} />} disabled={!!busy || data.tasks.length >= 12} onClick={() => edit('new')}>添加游戏</Button></div>
+    <Table<Task> size="small" rowKey="id" dataSource={data.tasks} pagination={false} locale={{ emptyText: <Empty description="还没有游戏任务" /> }} columns={[
+     { title: '游戏', render: (_, task) => <div className="drops-game"><strong>{task.game.name}</strong>{data.current?.taskId === task.id && <Tag color="processing">当前执行</Tag>}<small>{task.enabled ? '已启用' : '已停用'}</small></div> },
+     { title: '优先级', dataIndex: 'priority', width: 85, sorter: (a, b) => a.priority - b.priority, defaultSortOrder: 'descend' },
+     { title: '频道策略', render: (_, task) => <span>{task.channels.length ? `${task.channels.length} 个指定频道` : '未指定频道'}{task.autoChannels ? ' · 自动发现' : ''}</span> },
+     { title: '本轮目标', width: 260, render: (_, task) => { const goal = data.goals.find(g => g.taskId === task.id); return <div className="drops-goal-summary"><strong>{task.goal.mode === 'all' ? '本轮全部奖励' : '指定奖励'}{goal?.total ? ` · ${goal.completed} / ${goal.total}` : ''}</strong><span>{goalLabels[goal?.status ?? 'waiting_targets']}</span>{!!goal?.claimPending && <small>{goal.claimPending} 个目标已达标，待手动领取</small>}{!!goal?.blocked && <small>{goal.blocked} 个目标等待领取前置奖励，其他目标可继续</small>}</div>; } },
+     { title: '进度策略', width: 210, render: (_, task) => task.watchOnly ? <Tag color="warning">允许仅观看 · 资格需人工核对</Tag> : <Tag>确认活动与频道资格后执行</Tag> },
+     { title: '', width: 145, render: (_, task) => <div className="drops-actions"><Button size="small" disabled={!!busy} onClick={() => edit(task)}>设置</Button><Button size="small" disabled={!!busy} onClick={() => void action('task-toggle', `/tasks/${task.id}`, 'PUT', { gameName: task.game.name, priority: task.priority, watchOnly: task.watchOnly, autoChannels: task.autoChannels, channels: task.channels, enabled: !task.enabled })}>{task.enabled ? '停用' : '启用'}</Button></div> },
+    ]} />
+   </section>
+
+   <section className="wt-admin-panel drops-progress">
+    <div className="wt-admin-panel-title"><div><h2>官方掉宝进度</h2><p className="wt-admin-help">{data.progress.message} · 最近确认：{date(data.progress.sampledAt)}（北京时间）</p></div><Tag color={known ? 'success' : 'warning'}>{known ? '官方库存可读' : '进度未知'}</Tag></div>
+    {!known && <Alert type="warning" showIcon title="运行时长和观看上报成功，不代表 Twitch 已计入掉宝进度。" description="接口暂不可读时保留上次确认结果，请到 Twitch 库存核对；不会用本地计时补齐进度。" />}
+    {data.current?.eligibility === 'unverified' && <Alert type="info" title="当前使用仅观看模式：频道掉宝资格尚未经服务确认，请在 Twitch 活动页面核对。" />}
+    {data.currentProgress && <p className="wt-admin-help">当前会话由 Twitch 确认：{data.currentProgress.minutes ?? '未知'} 分钟 · {date(data.currentProgress.sampledAt)}</p>}
+    {data.campaigns.length ? <div className="drops-campaigns">{data.campaigns.map(campaign => <details key={campaign.id} open><summary><span>{campaign.name}</span><Tag>{campaign.gameName}</Tag>{campaign.linked === false && <Tag color="warning">需关联账号</Tag>}<small>截止 {date(campaign.endsAt)}</small></summary><div className="drops-rewards">{campaign.drops.map(drop => <div className="drops-reward" key={drop.id}>
+     <div><strong>{drop.benefits.join(' / ') || drop.name}</strong>{selectedRewards.has(rewardKey({ campaignId: campaign.id, dropId: drop.id })) && <Tag color="blue">本轮目标</Tag>}<small>确认于 {date(drop.sampledAt)}</small></div><div>{drop.minutes === null || drop.requiredMinutes === null ? <span>进度未知</span> : <><Progress percent={percent(drop.minutes, drop.requiredMinutes)} showInfo={false} size="small" /><small>{drop.minutes} / {drop.requiredMinutes} 分钟</small></>}</div><Tag color={drop.claimed ? 'success' : drop.claimable ? 'warning' : 'default'}>{drop.claimed === null ? '领取状态未知' : drop.claimed ? '已领取' : drop.claimable ? '待手动领取' : '尚未完成'}</Tag>
+    </div>)}</div></details>)}</div> : <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={data.account ? '尚未取得可展示的活动资料，可手动同步或在 Twitch 核对' : '连接 Twitch 后读取活动与奖励'} />}
+   </section>
+
+   <div className="drops-bottom">
+    <section className="wt-admin-panel"><div className="wt-admin-panel-title"><h2>低流量运行与连接状态</h2><Tag>持续挂机 · 无流量额度</Tag></div><p className="wt-admin-help">不下载视频或音频；复用连接，批量检查频道，缓存活动资料。只记录实际用量，不因累计流量暂停任务。代理统计隧道字节，直连含估算开销，可能与服务商账单不同。</p><dl className="drops-facts"><dt>最近一小时</dt><dd>{bytes(data.traffic.hourBytes)}</dd><dt>今日全部线路</dt><dd>{bytes(data.traffic.dayBytes)}</dd><dt>最近网络成功</dt><dd>{date(data.network.lastSuccessAt)}</dd><dt>最近观看上报</dt><dd>{date(data.lastWatchAt)}</dd><dt>已接收上报次数</dt><dd>{data.watchReports}（不等于掉宝分钟数）</dd><dt>最近官方状态检查</dt><dd>{date(data.lastSync)}</dd></dl>{data.network.lastError && <Alert type="warning" title={data.network.lastError} />}</section>
+    <section className="wt-admin-panel"><div className="wt-admin-panel-title"><h2>运行记录</h2>{taskRegistryHref && <a href={taskRegistryHref} onClick={onNavigateTasks}>定时任务 ↗</a>}</div><div className="drops-log" aria-label="脱敏运行记录">{data.events.length ? data.events.map(event => <div key={event.id}><time dateTime={event.at}>{date(event.at)}</time><span data-level={event.level}>{event.message}</span></div>) : <p>暂无运行记录</p>}</div></section>
+   </div>
+  </>}
+
+  <Drawer title="连接设置" width={460} open={settingsOpen} onClose={() => setSettingsOpen(false)} destroyOnHidden><Form form={settingsForm} layout="vertical" onFinish={async values => { if (await action('settings', '/settings', 'PATCH', values)) setSettingsOpen(false); }}><Form.Item name="networkMode" label="连接方式" rules={[{ required: true }]}><Select options={[{ value: 'auto', label: '直连优先，失败后使用配置的代理' }, { value: 'proxy', label: '仅使用配置的代理' }, { value: 'direct', label: '仅直连' }]} /></Form.Item><Alert type="info" showIcon title="代理由部署环境配置" description="不切换 NAS 系统代理或自动选择其他节点。网络错误逐步延长重试；遇限流或验证暂停，不通过换线路重试。" /><Button className="drops-form-save" type="primary" htmlType="submit" loading={busy === 'settings'}>保存设置</Button></Form></Drawer>
+  <Drawer title={editor === 'new' ? '添加游戏任务' : '游戏任务与奖励目标'} width={620} open={!!editor} onClose={() => setEditor(null)} destroyOnHidden><Form form={taskForm} layout="vertical" onFinish={async values => { const channels = values.channelsText.split(/[\s,，]+/).map(x => x.trim()).filter(Boolean); const goal = { mode: values.goalMode, reset: values.resetGoals, rewards: values.goalMode === 'selected' ? values.rewardKeys.map(key => { const [campaignId, dropId] = JSON.parse(key) as [string, string]; return { campaignId, dropId }; }) : [] }; const body = { ...values, channels, goal }; const path = editor === 'new' ? '/tasks' : `/tasks/${(editor as Task).id}`; if (await action('task', path, editor === 'new' ? 'POST' : 'PUT', body)) setEditor(null); }}><Form.Item name="gameName" label="Twitch 游戏名称" rules={[{ required: true, max: 100 }]}><Input placeholder="例如 War Thunder" /></Form.Item><Form.Item name="goalMode" label="本轮奖励目标" rules={[{ required: true }]}><Select options={[{ value: 'all', label: '本轮全部奖励（锁定当前活动）' }, { value: 'selected', label: '只完成我选择的奖励' }]} /></Form.Item>{goalMode === 'selected' ? <Form.Item name="rewardKeys" label="选择活动与奖励" rules={[{ required: true, type: 'array', min: 1, message: '请至少选择一个奖励；没有资料时先同步官方进度' }]}><Select mode="multiple" options={rewardOptions} optionFilterProp="label" maxTagCount={3} placeholder="按活动选择奖励，可跨同一游戏的多个活动" notFoundContent="暂无官方奖励资料，请先同步" /></Form.Item> : <div className="drops-goal-help"><p>保存后锁定本轮可见活动的全部奖励。暂无资料时，首次获取完整活动资料后锁定；后续新活动不会自动加入。</p>{!!editingTask?.goal.rewards.length && <><p>已锁定 {editingTask.goal.rewards.length} 个奖励，保存普通设置会保留本轮目标。</p><Form.Item name="resetGoals" valuePropName="checked"><Checkbox>重新选择本轮全部奖励（替换已锁定目标）</Checkbox></Form.Item></>}</div>}<Alert type="info" showIcon title="官方确认达标即停止该目标，奖励仍由你手动领取" description="前置奖励需要领取时自动等待，其他可进行的目标继续执行；领取后点击同步或等待下次检查。官方进度未知或活动过期不会被判定为完成。" /><Form.Item name="priority" label="优先级（数值越大越先执行）" rules={[{ required: true }]}><InputNumber min={0} max={100} precision={0} /></Form.Item><Form.Item name="channelsText" label="指定频道（每行一个频道名，最多 20 个）"><Input.TextArea rows={5} maxLength={600} placeholder="warthunder_esports" /></Form.Item><Form.Item name="enabled" valuePropName="checked"><Checkbox>启用此游戏任务</Checkbox></Form.Item><Form.Item name="autoChannels" valuePropName="checked"><Checkbox>自动寻找带掉宝标记的频道</Checkbox></Form.Item><Form.Item name="watchOnly" valuePropName="checked"><Checkbox>允许仅观看模式，由我在 Twitch 核对活动及频道资格</Checkbox></Form.Item><Alert type="warning" showIcon title="仅观看模式可能无法读取掉宝进度" description="请先确认游戏账号已关联、频道参与活动。服务只累计观看上报，不保证奖励获得；前置奖励可能需要先手动领取。" /><div className="drops-editor-actions"><Button type="primary" htmlType="submit" loading={busy === 'task'}>保存任务</Button>{editor && editor !== 'new' && <Button danger disabled={!!busy} onClick={async () => { if (await action('delete-task', `/tasks/${editor.id}`, 'DELETE')) setEditor(null); }}>删除任务</Button>}</div></Form></Drawer>
+  <Modal title="解除 Twitch 连接" open={disconnectOpen} onCancel={() => setDisconnectOpen(false)} confirmLoading={busy === 'disconnect'} okText="解除连接" okButtonProps={{ danger: true }} onOk={async () => { if (await action('disconnect', '/auth/disconnect')) setDisconnectOpen(false); }}><p>停止所有挂机任务，清除 NAS 保存的 Twitch 登录，并尝试撤销远端授权。游戏任务设置会保留。</p></Modal>
+ </div>;
+}

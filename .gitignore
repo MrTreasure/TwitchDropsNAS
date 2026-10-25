@@ -1,0 +1,13 @@
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+ui/dist/
+artifacts/
+data/
+.env
+.env.*
+!.env.example
+*.sqlite*
+credentials.json
+admin-token
