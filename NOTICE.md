@@ -50,7 +50,7 @@ SOFTWARE.
 ## Public campaign discovery
 
 The optional runtime fallback uses public discovery metadata from
-https://twitch-drops-api.sunkwi.com/v2/drops. No catalogue snapshots or user data
+https://drops.sunkwi.com/api/twitch/drops. No catalogue snapshots or user data
 are distributed in this source tree or release archives. This service is not
 Twitch; its data cannot prove account linkage, progress, eligibility or claims.
 The compatibility limitation and fallback approaches were compared with the
