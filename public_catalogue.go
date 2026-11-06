@@ -2,14 +2,13 @@ package main
 
 import "context"
 
-const publicCatalogueURL = "https://twitch-drops-api.sunkwi.com/v2/drops"
+const publicCatalogueURL = "https://drops.sunkwi.com/api/twitch/drops"
 
 // Public discovery metadata is never account state or proof of completion.
 func parsePublicCatalogue(payload M, at float64) ([]any, error) {
-	updated := timestamp(payload["lastUpdatedAt"])
-	interval := number(payload["refreshIntervalSeconds"])
-	groups, ok := payload["data"].([]any)
-	if !ok || len(groups) > 1000 || updated <= 0 || interval < 1 || interval > 3600 || updated > at+120 || at-updated > max(300, interval*5) {
+	updated := timestamp(payload["refreshedAt"])
+	groups, ok := payload["games"].([]any)
+	if !ok || len(groups) > 1000 || updated <= 0 || updated > at+120 || at-updated > 300 {
 		return nil, fault("公共活动目录过期或格式无效，保留已确认的 Twitch 数据", "catalogue_unavailable", 409)
 	}
 	items, seen := []any{}, map[string]bool{}
@@ -24,7 +23,7 @@ func parsePublicCatalogue(payload M, at float64) ([]any, error) {
 			game := obj(raw["game"])
 			game["name"] = first(game["name"], game["displayName"])
 			raw["game"] = game
-			c := cleanCampaign(raw, text(payload["lastUpdatedAt"]))
+			c := cleanCampaign(raw, text(payload["refreshedAt"]))
 			if text(c["gameId"]) == "" || text(c["gameName"]) == "" || len(list(c["drops"])) == 0 {
 				continue
 			}
@@ -63,7 +62,7 @@ func (s *Service) refreshPublicCatalogue(ctx context.Context) error {
 		s.store.PutMany(M{"publicCatalogueFailedAt": unixNow(), "publicCatalogueError": safeError(err)})
 		return err
 	}
-	s.store.PutMany(M{"publicCatalogueCache": M{"schemaVersion": 1, "fetchedAt": unixNow(), "sampledAt": payload["lastUpdatedAt"], "items": items}, "publicCatalogueFailedAt": 0, "publicCatalogueError": nil})
+	s.store.PutMany(M{"publicCatalogueCache": M{"schemaVersion": 1, "fetchedAt": unixNow(), "sampledAt": payload["refreshedAt"], "items": items}, "publicCatalogueFailedAt": 0, "publicCatalogueError": nil})
 	return nil
 }
 

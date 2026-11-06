@@ -26,7 +26,7 @@ func TestPublicCatalogueProviderFixture(t *testing.T) {
 	if json.Unmarshal(raw, &payload) != nil {
 		t.Fatal("invalid provider JSON")
 	}
-	items, err := parsePublicCatalogue(payload, timestamp(payload["lastUpdatedAt"]))
+	items, err := parsePublicCatalogue(payload, timestamp(payload["refreshedAt"]))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestPublicCampaignCanBeSelectedWithoutChangingTasks(t *testing.T) {
 func publicTestPayload() M {
 	drop := M{"id": "reward", "requiredMinutesWatched": 1, "self": M{"currentMinutesWatched": 999, "isClaimed": true, "dropInstanceID": "untrusted"}}
 	campaign := M{"id": "candidate", "name": "Synthetic campaign", "startAt": iso(unixNow() - 60), "endAt": iso(unixNow() + 3600), "status": "ACTIVE", "game": M{"id": "game", "displayName": "Synthetic game", "slug": "synthetic-game"}, "self": M{"isAccountConnected": true}, "allow": M{"isEnabled": true, "channels": []any{M{"id": "channel", "name": "synthetic"}}}, "timeBasedDrops": []any{drop}}
-	return M{"lastUpdatedAt": now(), "refreshIntervalSeconds": 60, "data": []any{M{"rewards": []any{campaign}}}}
+	return M{"refreshedAt": now(), "games": []any{M{"rewards": []any{campaign}}}}
 }
 
 func TestPublicCatalogueCannotSupplyAccountStateOrCompletion(t *testing.T) {
@@ -94,7 +94,7 @@ func TestPublicCatalogueCannotSupplyAccountStateOrCompletion(t *testing.T) {
 		t.Fatal("public catalogue completed a goal")
 	}
 	payload := publicTestPayload()
-	payload["lastUpdatedAt"] = iso(unixNow() - 7200)
+	payload["refreshedAt"] = iso(unixNow() - 7200)
 	if _, err := parsePublicCatalogue(payload, unixNow()); err == nil {
 		t.Fatal("stale catalogue accepted")
 	}
