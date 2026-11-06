@@ -4,11 +4,13 @@ import (
 	"errors"
 	"gopkg.in/yaml.v3"
 	"io"
+	"net"
 	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
+	"time"
 )
 
 type Proxy struct {
@@ -67,15 +69,9 @@ func (p *Proxy) Start() error {
 	if yaml.Unmarshal(raw, &config) != nil {
 		return errors.New("invalid proxy source")
 	}
-	var node any
-	for _, v := range list(config["proxies"]) {
-		if text(obj(v)["name"]) == p.Node {
-			node = v
-			break
-		}
-	}
-	if node == nil {
-		return errors.New("selected proxy node missing")
+	selection, e := selectedProxyConfig(config, p.Node)
+	if e != nil {
+		return e
 	}
 	if p.dir != "" {
 		os.RemoveAll(p.dir)
@@ -84,7 +80,7 @@ func (p *Proxy) Start() error {
 	if e != nil {
 		return e
 	}
-	runtime := M{"mixed-port": p.Port, "bind-address": "127.0.0.1", "allow-lan": false, "mode": "rule", "log-level": "silent", "ipv6": false, "external-controller": "127.0.0.1:" + text(p.Controller), "secret": p.Secret, "proxies": []any{node}, "rules": []any{"MATCH," + p.Node}}
+	runtime := M{"mixed-port": p.Port, "bind-address": "127.0.0.1", "allow-lan": false, "mode": "rule", "log-level": "silent", "ipv6": false, "external-controller": "127.0.0.1:" + text(p.Controller), "secret": p.Secret, "proxies": selection["proxies"], "proxy-groups": selection["proxy-groups"], "rules": []any{"MATCH," + p.Node}}
 	data, e := yaml.Marshal(runtime)
 	if e != nil {
 		return e
@@ -103,7 +99,22 @@ func (p *Proxy) Start() error {
 	p.cmd = cmd
 	p.done = make(chan struct{})
 	go func() { _ = cmd.Wait(); close(p.done) }()
-	return nil
+	// Do not dispatch the first Twitch request before the local proxy listens.
+	deadline := time.Now().Add(3 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case <-p.done:
+			return errors.New("proxy exited before readiness")
+		default:
+		}
+		connection, err := net.DialTimeout("tcp", net.JoinHostPort("127.0.0.1", text(p.Port)), 100*time.Millisecond)
+		if err == nil {
+			connection.Close()
+			return nil
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	return errors.New("proxy listener not ready")
 }
 func (p *Proxy) Close() {
 	p.mu.Lock()
@@ -116,4 +127,66 @@ func (p *Proxy) Close() {
 	if p.dir != "" {
 		_ = os.RemoveAll(filepath.Clean(p.dir))
 	}
+}
+
+// Copy only the explicitly selected node/group and its dependencies.
+// The host's listeners, routing rules and unrelated proxy credentials stay out.
+func selectedProxyConfig(config M, selected string) (M, error) {
+	nodes, groups := map[string]M{}, map[string]M{}
+	for _, raw := range list(config["proxies"]) {
+		row := obj(raw)
+		nodes[text(row["name"])] = row
+	}
+	for _, raw := range list(config["proxy-groups"]) {
+		row := obj(raw)
+		groups[text(row["name"])] = row
+	}
+	outNodes, outGroups := []any{}, []any{}
+	visited, active := map[string]bool{}, map[string]bool{}
+	var visit func(string) error
+	visit = func(name string) error {
+		if name == "DIRECT" || name == "REJECT" || name == "REJECT-DROP" {
+			return nil
+		}
+		if active[name] {
+			return errors.New("cyclic proxy dependency")
+		}
+		if visited[name] {
+			return nil
+		}
+		active[name] = true
+		if node := nodes[name]; node != nil {
+			if dependency := text(node["dialer-proxy"]); dependency != "" {
+				if err := visit(dependency); err != nil {
+					return err
+				}
+			}
+			outNodes = append(outNodes, node)
+		} else if group := groups[name]; group != nil {
+			if len(list(group["use"])) > 0 {
+				return errors.New("proxy provider groups are not supported")
+			}
+			if len(list(group["proxies"])) == 0 {
+				return errors.New("empty proxy group")
+			}
+			for _, dependency := range list(group["proxies"]) {
+				if err := visit(text(dependency)); err != nil {
+					return err
+				}
+			}
+			outGroups = append(outGroups, group)
+		} else {
+			return errors.New("selected proxy dependency missing")
+		}
+		active[name] = false
+		visited[name] = true
+		return nil
+	}
+	if selected == "DIRECT" || selected == "REJECT" || selected == "REJECT-DROP" {
+		return nil, errors.New("a proxy node or group is required")
+	}
+	if err := visit(selected); err != nil {
+		return nil, err
+	}
+	return M{"proxies": outNodes, "proxy-groups": outGroups}, nil
 }
