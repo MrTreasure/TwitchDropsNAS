@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -581,44 +580,9 @@ func (s *Service) scan(ctx context.Context, force bool) (result M, err error) {
 			catalogueMessage = nil
 		}
 	}
-	if e == nil {
-		enabledGames, targets := map[string]bool{}, map[string]bool{}
-		for _, v := range tasks {
-			t := obj(v)
-			if flag(t["enabled"]) {
-				enabledGames[text(obj(t["game"])["id"])] = true
-				for _, v := range list(obj(t["goal"])["rewards"]) {
-					targets[text(obj(v)["campaignId"])] = true
-				}
-			}
-		}
-		candidates := []any{}
-		for _, v := range catalogue {
-			c := obj(v)
-			if enabledGames[text(obj(c["game"])["id"])] && (text(c["status"]) == "ACTIVE" || targets[text(c["id"])]) {
-				candidates = append(candidates, c)
-			}
-		}
-		sort.SliceStable(candidates, func(i, j int) bool {
-			return timestamp(campaigns[text(obj(candidates[i])["id"])]["metadataFetchedAt"]) < timestamp(campaigns[text(obj(candidates[j])["id"])]["metadataFetchedAt"])
-		})
-		for _, v := range candidates[:min(24, len(candidates))] {
-			id := text(obj(v)["id"])
-			if !force && unixNow()-timestamp(campaigns[id]["metadataFetchedAt"]) < 21600 {
-				continue
-			}
-			var detailed M
-			detailed, e = s.twitch.details(ctx, account, id)
-			if e != nil {
-				break
-			}
-			if len(detailed) > 0 {
-				c := mergeProgress(cleanCampaign(detailed, now()), campaigns[id])
-				c["metadataFetchedAt"] = now()
-				putCampaign(c)
-			}
-		}
-	}
+	// Activity details are fetched only by the explicit preview action.
+	// Metadata synchronization reads the directory and account inventory only.
+
 	if e != nil {
 		if errorCode(e) != "capability_unavailable" {
 			return nil, e
